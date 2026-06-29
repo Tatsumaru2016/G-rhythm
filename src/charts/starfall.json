@@ -1,38 +1,374 @@
 {
   "id": "starfall",
   "title": "STARFALL",
-  "artist": "G.RHYTHM Sound Team",
-  "bpm": 128,
+  "artist": "",
+  "bpm": 130.5,
   "offset": 1.5,
   "lpb": 4,
   "difficulty": "HARD",
-  "level": 6,
-  "genre": "pop",
+  "level": 9,
+  "genre": "rock",
+  "audioTrack": "Hard.mp3",
   "notes": [
-    { "lane": 1, "beat": 0, "type": "tap" },
-    { "lane": 2, "beat": 8, "type": "tap" },
-    { "lane": 0, "beat": 16, "type": "tap" },
-    { "lane": 3, "beat": 24, "type": "tap" },
-    { "lane": 1, "beat": 32, "type": "tap" },
-    { "lane": 3, "beat": 48, "type": "tap" },
-    { "lane": 2, "beat": 56, "type": "tap" },
-    { "lane": 0, "beat": 64, "type": "tap" },
-    { "lane": 1, "beat": 72, "type": "tap" },
-    { "lane": 1, "beat": 80, "type": "tap" },
-    { "lane": 3, "beat": 80, "type": "tap" },
-    { "lane": 0, "beat": 96, "type": "tap" },
-    { "lane": 2, "beat": 104, "type": "tap" },
-    { "lane": 1, "beat": 112, "type": "tap" },
-    { "lane": 3, "beat": 120, "type": "tap" },
-    { "lane": 0, "beat": 128, "type": "tap" },
-    { "lane": 2, "beat": 128, "type": "tap" },
-    { "lane": 2, "beat": 136, "type": "tap" },
-    { "lane": 1, "beat": 152, "type": "tap" },
-    { "lane": 3, "beat": 160, "type": "tap" },
-    { "lane": 0, "beat": 168, "type": "tap" },
-    { "lane": 2, "beat": 176, "type": "tap" },
-    { "lane": 0, "beat": 184, "type": "tap" },
-    { "lane": 1, "beat": 184, "type": "tap" },
-    { "lane": 2, "beat": 184, "type": "tap" }
+    {
+      "lane": 1,
+      "beat": 0,
+      "type": "tap"
+    },
+    {
+      "lane": 2,
+      "beat": 5,
+      "type": "tap"
+    },
+    {
+      "lane": 0,
+      "beat": 15,
+      "type": "tap"
+    },
+    {
+      "lane": 1,
+      "beat": 27,
+      "type": "tap"
+    },
+    {
+      "lane": 0,
+      "beat": 39,
+      "type": "tap"
+    },
+    {
+      "lane": 2,
+      "beat": 49,
+      "type": "tap"
+    },
+    {
+      "lane": 0,
+      "beat": 59,
+      "type": "tap"
+    },
+    {
+      "lane": 2,
+      "beat": 66,
+      "type": "tap"
+    },
+    {
+      "lane": 2,
+      "beat": 77,
+      "type": "tap"
+    },
+    {
+      "lane": 0,
+      "beat": 83,
+      "type": "tap"
+    },
+    {
+      "lane": 3,
+      "beat": 94,
+      "type": "tap"
+    },
+    {
+      "lane": 3,
+      "beat": 106,
+      "type": "tap"
+    },
+    {
+      "lane": 0,
+      "beat": 121,
+      "type": "tap"
+    },
+    {
+      "lane": 3,
+      "beat": 134,
+      "type": "tap"
+    },
+    {
+      "lane": 1,
+      "beat": 140,
+      "type": "tap"
+    },
+    {
+      "lane": 3,
+      "beat": 150,
+      "type": "tap"
+    },
+    {
+      "lane": 0,
+      "beat": 157,
+      "type": "tap"
+    },
+    {
+      "lane": 2,
+      "beat": 170,
+      "type": "tap"
+    },
+    {
+      "lane": 2,
+      "beat": 181,
+      "type": "tap"
+    },
+    {
+      "lane": 0,
+      "beat": 199,
+      "type": "tap"
+    },
+    {
+      "lane": 2,
+      "beat": 209,
+      "type": "tap"
+    },
+    {
+      "lane": 0,
+      "beat": 219,
+      "type": "tap"
+    },
+    {
+      "lane": 1,
+      "beat": 223,
+      "type": "tap"
+    },
+    {
+      "lane": 2,
+      "beat": 241,
+      "type": "tap"
+    },
+    {
+      "lane": 2,
+      "beat": 257,
+      "type": "tap"
+    },
+    {
+      "lane": 3,
+      "beat": 266,
+      "type": "tap"
+    },
+    {
+      "lane": 1,
+      "beat": 276,
+      "type": "tap"
+    },
+    {
+      "lane": 2,
+      "beat": 289,
+      "type": "tap"
+    },
+    {
+      "lane": 0,
+      "beat": 298,
+      "type": "tap"
+    },
+    {
+      "lane": 1,
+      "beat": 308,
+      "type": "tap"
+    },
+    {
+      "lane": 3,
+      "beat": 318,
+      "type": "tap"
+    },
+    {
+      "lane": 2,
+      "beat": 325,
+      "type": "tap"
+    },
+    {
+      "lane": 0,
+      "beat": 339,
+      "type": "tap"
+    },
+    {
+      "lane": 2,
+      "beat": 349,
+      "type": "tap"
+    },
+    {
+      "lane": 0,
+      "beat": 363,
+      "type": "tap"
+    },
+    {
+      "lane": 1,
+      "beat": 376,
+      "type": "tap"
+    },
+    {
+      "lane": 2,
+      "beat": 385,
+      "type": "tap"
+    },
+    {
+      "lane": 3,
+      "beat": 394,
+      "type": "tap"
+    },
+    {
+      "lane": 2,
+      "beat": 406,
+      "type": "tap"
+    },
+    {
+      "lane": 0,
+      "beat": 414,
+      "type": "tap"
+    },
+    {
+      "lane": 1,
+      "beat": 421,
+      "type": "tap"
+    },
+    {
+      "lane": 3,
+      "beat": 429,
+      "type": "tap"
+    },
+    {
+      "lane": 1,
+      "beat": 444,
+      "type": "tap"
+    },
+    {
+      "lane": 0,
+      "beat": 459,
+      "type": "tap"
+    },
+    {
+      "lane": 1,
+      "beat": 472,
+      "type": "tap"
+    },
+    {
+      "lane": 0,
+      "beat": 483,
+      "type": "tap"
+    },
+    {
+      "lane": 0,
+      "beat": 495,
+      "type": "tap"
+    },
+    {
+      "lane": 2,
+      "beat": 509,
+      "type": "tap"
+    },
+    {
+      "lane": 0,
+      "beat": 519,
+      "type": "tap"
+    },
+    {
+      "lane": 2,
+      "beat": 533,
+      "type": "tap"
+    },
+    {
+      "lane": 3,
+      "beat": 544,
+      "type": "tap"
+    },
+    {
+      "lane": 0,
+      "beat": 551,
+      "type": "tap"
+    },
+    {
+      "lane": 2,
+      "beat": 561,
+      "type": "tap"
+    },
+    {
+      "lane": 3,
+      "beat": 574,
+      "type": "tap"
+    },
+    {
+      "lane": 1,
+      "beat": 586,
+      "type": "tap"
+    },
+    {
+      "lane": 3,
+      "beat": 594,
+      "type": "tap"
+    },
+    {
+      "lane": 1,
+      "beat": 600,
+      "type": "tap"
+    },
+    {
+      "lane": 3,
+      "beat": 608,
+      "type": "tap"
+    },
+    {
+      "lane": 2,
+      "beat": 615,
+      "type": "tap"
+    },
+    {
+      "lane": 2,
+      "beat": 619,
+      "type": "tap"
+    },
+    {
+      "lane": 2,
+      "beat": 630,
+      "type": "tap"
+    },
+    {
+      "lane": 1,
+      "beat": 640,
+      "type": "tap"
+    },
+    {
+      "lane": 0,
+      "beat": 651,
+      "type": "tap"
+    },
+    {
+      "lane": 3,
+      "beat": 662,
+      "type": "tap"
+    },
+    {
+      "lane": 0,
+      "beat": 671,
+      "type": "tap"
+    },
+    {
+      "lane": 0,
+      "beat": 683,
+      "type": "tap"
+    },
+    {
+      "lane": 2,
+      "beat": 693,
+      "type": "tap"
+    },
+    {
+      "lane": 3,
+      "beat": 701,
+      "type": "tap"
+    },
+    {
+      "lane": 1,
+      "beat": 712,
+      "type": "tap"
+    },
+    {
+      "lane": 2,
+      "beat": 725,
+      "type": "tap"
+    },
+    {
+      "lane": 1,
+      "beat": 740,
+      "type": "tap"
+    },
+    {
+      "lane": 3,
+      "beat": 754,
+      "type": "tap"
+    }
   ]
 }

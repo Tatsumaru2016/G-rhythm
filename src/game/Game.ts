@@ -1,6 +1,12 @@
 import type { ChartData, ActiveNote, GameStats, JudgmentType, LaneIndex } from '../types';
 import { BASE_SCORE } from '../types';
-import { parseChart, getSongDuration, normalizeChartForPlay, withLeadInPad } from './ChartParser';
+import {
+  parseChart,
+  getSongDuration,
+  getDancerRotationDuration,
+  normalizeChartForPlay,
+  withLeadInPad,
+} from './ChartParser';
 import { getAccuracyRatio } from '../data/charts';
 import {
   getNewAccuracyMilestones,
@@ -68,8 +74,16 @@ export class Game {
     return this.renderer.preloadDancerModels(onProgress);
   }
 
+  preloadEarlyDancers(): Promise<void> {
+    return this.renderer.preloadEarlyDancers();
+  }
+
   bindTouchZones(zones: HTMLElement[]) {
     this.input.bindTouchZones(zones);
+  }
+
+  getTouchZoneLayout() {
+    return this.renderer.getTouchZoneLayout();
   }
 
   start(chart: ChartData) {
@@ -88,6 +102,7 @@ export class Game {
     this.lastFrameTime = performance.now();
     this.renderer.resetSideEffects(playChart);
     this.renderer.setSongDuration(this.songDuration);
+    this.renderer.setDancerRotationDuration(getDancerRotationDuration(playChart));
     void this.audio.resume().then(() => this.audio.playCountdownTick(3));
     this.loop();
   }

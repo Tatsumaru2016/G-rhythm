@@ -43,16 +43,21 @@ export class Renderer {
   private ctx: CanvasRenderingContext2D;
   private width = 0;
   private height = 0;
+  private static readonly LANE_MARGIN_LEFT = 10;
+  private static readonly LANE_AREA_WIDTH_RATIO = 0.34;
+  private static readonly LANE_AREA_MAX_PX = 392;
+
   private laneWidth = 0;
   private laneStartX = 0;
   private laneTopY = 0;
   private hitLineY = 0;
   private laneBottomY = 0;
   private noteHeight = 0;
-  private readonly perfectMeterBandH = 26;
+  private readonly perfectMeterBandH = 36;
   private laneGlows: LaneGlow[] = [];
   private scrollSpeed = DEFAULT_SCROLL_SPEED;
   private songDuration = 0;
+  private dancerRotationDuration = 0;
   private reducedFlash = false;
   private screen: ScreenEffect = { shake: 0, perfectPulse: 0 };
   private lastJudgment: { text: string; color: string; alpha: number; scale: number; glow: number } | null = null;
@@ -119,9 +124,12 @@ export class Renderer {
     this.canvas.style.height = `${this.height}px`;
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    const maxLaneArea = Math.min(this.width * 0.85, 520);
+    const maxLaneArea = Math.min(
+      this.width * Renderer.LANE_AREA_WIDTH_RATIO,
+      Renderer.LANE_AREA_MAX_PX,
+    );
     this.laneWidth = maxLaneArea / 4;
-    this.laneStartX = (this.width - maxLaneArea) / 2;
+    this.laneStartX = Renderer.LANE_MARGIN_LEFT;
     this.laneTopY = 0;
     const keyHintReserve = Math.max(80, Math.min(108, Math.round(this.height * 0.11)));
     this.hitLineY = this.height - keyHintReserve;
@@ -143,6 +151,35 @@ export class Renderer {
     return this.laneLeft(lane) + this.laneWidth / 2;
   }
 
+  getTouchZoneLayout(): {
+    laneStartX: number;
+    laneWidth: number;
+    topY: number;
+    hitLineY: number;
+  } {
+    return {
+      laneStartX: this.laneStartX,
+      laneWidth: this.laneWidth,
+      topY: this.laneTopY,
+      hitLineY: this.hitLineY,
+    };
+  }
+
+  private getPlayfieldCenterX(): number {
+    return this.laneStartX + this.laneWidth * 2;
+  }
+
+  private getDancerStageBounds(): { left: number; centerX: number; right: number; width: number } {
+    const left = this.laneStartX + this.laneWidth * 4;
+    const width = Math.max(120, this.width - left);
+    return {
+      left,
+      centerX: left + width * 0.5,
+      right: this.width - Renderer.LANE_MARGIN_LEFT,
+      width,
+    };
+  }
+
   getHitLineY(): number {
     return this.hitLineY;
   }
@@ -153,6 +190,10 @@ export class Renderer {
 
   setSongDuration(duration: number): void {
     this.songDuration = Math.max(0, duration);
+  }
+
+  setDancerRotationDuration(duration: number): void {
+    this.dancerRotationDuration = Math.max(0, duration);
   }
 
   setReducedFlash(enabled: boolean): void {
@@ -172,6 +213,10 @@ export class Renderer {
     return this.stageDancers.preloadAll(onProgress);
   }
 
+  preloadEarlyDancers(): Promise<void> {
+    return this.stageDancers.preloadEarlyPhase();
+  }
+
   startDancerPreview(leftId: DancerModelId, rightId: DancerModelId): void {
     if (this.dancerPreviewActive) {
       this.stageDancers.setPreviewPair(leftId, rightId);
@@ -188,7 +233,7 @@ export class Renderer {
       this.time += dt;
       this.renderCleared();
       const bounds = this.laneBounds();
-      this.compositeDancers(dt, bounds, 'early', 0);
+      this.compositeDancers(dt, bounds, 0, 0);
       this.previewRafId = requestAnimationFrame(loop);
     };
     this.previewRafId = requestAnimationFrame(loop);
@@ -223,6 +268,7 @@ export class Renderer {
   onGameEnd(): void {
     this.playfieldActive = false;
     this.songDuration = 0;
+    this.dancerRotationDuration = 0;
     this.lastJudgment = null;
     this.accuracyMilestoneBanner = null;
     this.screen = { shake: 0, perfectPulse: 0 };
@@ -431,7 +477,7 @@ export class Renderer {
     ctx.globalAlpha = 1;
     ctx.restore();
 
-    this.compositeDancers(this.lastDt, laneBounds, songPhase, this.sideFX.getPerfectBoost());
+    this.compositeDancers(this.lastDt, laneBounds, currentTime, this.sideFX.getPerfectBoost());
 
     this.drawLanes();
     if (this.playfieldActive) {
@@ -450,26 +496,31 @@ export class Renderer {
     ctx.restore();
   }
 
-  /** 左右マージン演出の直後・レーンより手前にダンサーを合成（中央盤面は触らない） */
+  /** 左右マージン演出の直後・レーンより手前にダンサーを合成（ステージ右エリア） */
   private compositeDancers(
     dt: number,
     laneBounds: LaneBounds,
-    songPhase: SongPhase,
+    currentTime: number,
     perfectBoost: number,
   ): void {
     if (!this.playfieldActive && !this.dancerPreviewActive) return;
 
     this.stageDancers.render(
-      dt, laneBounds, songPhase, perfectBoost, this.width, this.height,
+      dt,
+      laneBounds,
+      currentTime,
+      this.dancerRotationDuration > 0 ? this.dancerRotationDuration : this.songDuration,
+      perfectBoost,
+      this.width,
+      this.height,
     );
 
     const dancerCanvas = this.stageDancers.getCanvas();
     if (dancerCanvas.width <= 0 || dancerCanvas.height <= 0) return;
 
     const laneEnd = laneBounds.startX + laneBounds.width;
-    const leftW = laneBounds.startX;
-    const rightX = laneEnd;
-    const rightW = this.width - laneEnd;
+    const stageX = laneEnd;
+    const stageW = this.width - laneEnd;
 
     const ctx = this.ctx;
     const blit = () => ctx.drawImage(dancerCanvas, 0, 0, this.width, this.height);
@@ -478,19 +529,16 @@ export class Renderer {
     ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = 1;
 
-    if (leftW > 12) {
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(0, 0, leftW, this.height);
-      ctx.clip();
+    if (this.dancerPreviewActive) {
       blit();
       ctx.restore();
+      return;
     }
 
-    if (rightW > 12) {
+    if (stageW > 12) {
       ctx.save();
       ctx.beginPath();
-      ctx.rect(rightX, 0, rightW, this.height);
+      ctx.rect(stageX, 0, stageW, this.height);
       ctx.clip();
       blit();
       ctx.restore();
@@ -581,6 +629,17 @@ export class Renderer {
     ctx.strokeStyle = 'rgba(255,255,255,0.36)';
     ctx.lineWidth = 2;
     ctx.strokeRect(this.laneStartX, this.laneTopY, this.laneWidth * 4, laneBottom - this.laneTopY);
+
+    const laneEnd = this.laneStartX + this.laneWidth * 4;
+    const stageGrad = ctx.createLinearGradient(laneEnd, 0, laneEnd + 48, 0);
+    stageGrad.addColorStop(0, 'rgba(0, 229, 255, 0.22)');
+    stageGrad.addColorStop(1, 'rgba(0, 229, 255, 0)');
+    ctx.strokeStyle = stageGrad;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(laneEnd, this.laneTopY);
+    ctx.lineTo(laneEnd, laneBottom);
+    ctx.stroke();
 
     this.drawLaneCenterGuides(
       this.laneTopY + this.perfectMeterBandH,
@@ -1187,7 +1246,7 @@ export class Renderer {
     const stackRatio = getPerfectStackRatio(perfectBoost);
     const tier = getPerfectDancerTier(perfectBoost);
     const barX = this.laneStartX + 6;
-    const barY = this.laneTopY + 14;
+    const barY = this.laneTopY + 24;
     const barW = this.laneWidth * 4 - 12;
     const barH = 7;
     const pulse = tier > 0 ? 0.75 + 0.25 * Math.sin(this.time * (6 + tier * 2)) : 0.55;
@@ -1245,12 +1304,18 @@ export class Renderer {
 
   private drawHUD(stats: GameStats, chart: ChartData, currentTime: number) {
     const ctx = this.ctx;
+    const margin = Renderer.LANE_MARGIN_LEFT;
+    const hudRightX = this.width - margin;
+    const stage = this.getDancerStageBounds();
 
+    ctx.save();
+
+    // 曲名・BPMなど — 画面右上
+    ctx.textAlign = 'right';
     ctx.font = 'bold 14px "Noto Sans JP", sans-serif';
     ctx.fillStyle = 'rgba(255,255,255,0.6)';
-    ctx.textAlign = 'left';
-    ctx.fillText(`${chart.title}`, 20, 30);
-    ctx.fillText(`${chart.bpm} BPM · ${getGenreLabel(resolveGenre(chart))}`, 20, 50);
+    ctx.fillText(chart.title, hudRightX, 30);
+    ctx.fillText(`${chart.bpm} BPM · ${getGenreLabel(resolveGenre(chart))}`, hudRightX, 50);
 
     if (this.songDuration > 0) {
       const phaseLabel = getPhaseLabel(currentTime, this.songDuration);
@@ -1261,19 +1326,8 @@ export class Renderer {
         : phaseMult >= 1.15
           ? 'rgba(120, 220, 255, 0.88)'
           : 'rgba(180, 255, 200, 0.75)';
-      ctx.fillText(`${phaseLabel}  ×${phaseMult.toFixed(2)}`, 20, 72);
+      ctx.fillText(`${phaseLabel}  ×${phaseMult.toFixed(2)}`, hudRightX, 70);
     }
-
-    ctx.textAlign = 'right';
-    ctx.font = 'bold 11px Orbitron, sans-serif';
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
-    ctx.fillText(t('ui.score'), this.width - 20, 28);
-    ctx.font = 'bold 46px Orbitron, sans-serif';
-    ctx.fillStyle = '#ffffff';
-    ctx.shadowColor = '#00ffff';
-    ctx.shadowBlur = 14;
-    ctx.fillText(stats.score.toLocaleString(), this.width - 20, 68);
-    ctx.shadowBlur = 0;
 
     const total = stats.perfect + stats.great + stats.good + stats.bad + stats.miss;
     if (total > 0) {
@@ -1285,20 +1339,34 @@ export class Renderer {
         : tier === 80 ? 0.08 + Math.sin(this.time * 6) * 0.05
         : 0;
 
-      ctx.textAlign = 'right';
       ctx.font = 'bold 11px Orbitron, sans-serif';
       ctx.fillStyle = tierStyle ? tierStyle.color : 'rgba(255, 255, 255, 0.45)';
       if (tierStyle) {
         ctx.shadowColor = tierStyle.color;
         ctx.shadowBlur = 8 + tierPulse * 20;
       }
-      ctx.fillText(t('ui.acc'), this.width - 20, 92);
-      ctx.font = 'bold 24px Orbitron, sans-serif';
+      ctx.fillText(t('ui.acc'), hudRightX, 92);
+      ctx.font = 'bold 22px Orbitron, sans-serif';
       ctx.fillStyle = tierStyle ? tierStyle.color : 'rgba(255, 255, 255, 0.88)';
       if (tierStyle) ctx.shadowBlur = 12 + tierPulse * 28;
-      ctx.fillText(`${acc}%`, this.width - 20, 118);
+      ctx.fillText(`${acc}%`, hudRightX, 116);
       ctx.shadowBlur = 0;
     }
+
+    // スコア — ダンサーエリア中央上
+    const scoreX = stage.centerX;
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 11px Orbitron, sans-serif';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+    ctx.fillText(t('ui.score'), scoreX, 36);
+    ctx.font = 'bold 38px Orbitron, sans-serif';
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowColor = '#00ffff';
+    ctx.shadowBlur = 14;
+    ctx.fillText(stats.score.toLocaleString(), scoreX, 70);
+    ctx.shadowBlur = 0;
+
+    ctx.restore();
   }
 
   private drawAccuracyMilestoneBanner() {
@@ -1310,7 +1378,7 @@ export class Renderer {
     const y = this.hitLineY - 150;
 
     ctx.save();
-    ctx.translate(this.width / 2, y);
+    ctx.translate(this.getPlayfieldCenterX(), y);
     ctx.scale(banner.scale, banner.scale);
     ctx.globalAlpha = banner.alpha;
 
@@ -1348,7 +1416,7 @@ export class Renderer {
     if (stats.combo <= 0) return;
 
     const ctx = this.ctx;
-    const cx = this.width / 2;
+    const cx = this.getPlayfieldCenterX();
     const cy = (this.laneTopY + this.hitLineY) * 0.45;
     const pulse = 1 + 0.06 * Math.sin(this.time * 9);
     const growth = 1 + Math.min(stats.combo / 60, 1) * 0.35;
@@ -1402,7 +1470,7 @@ export class Renderer {
     const j = this.lastJudgment;
 
     ctx.save();
-    ctx.translate(this.width / 2, this.hitLineY - 90);
+    ctx.translate(this.getPlayfieldCenterX(), this.hitLineY - 90);
     ctx.scale(j.scale, j.scale);
     ctx.globalAlpha = j.alpha;
     ctx.textAlign = 'center';

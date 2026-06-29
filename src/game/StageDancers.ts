@@ -2,32 +2,27 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { LaneBounds } from './SideStageFX';
-import type { SongPhase } from './scrollPhase';
+import type { SongPhase, DancerSubPhase } from './scrollPhase';
+import { getDancerSubPhase } from './scrollPhase';
 import {
   ALL_DANCER_MODEL_IDS,
-  PHASE_LEFT_POOLS,
-  PHASE_RIGHT_POOLS,
+  clipIndexFromModelId,
+  createDancerRotationPlan,
+  FIRST_MODELS,
   getPerfectDancerTier,
   perfectModelForTier,
+  PHASE_MODEL_POOLS,
   type DancerModelId,
   type PerfectDancerTier,
 } from './dancerCatalog';
+import { dancerModelUrl } from './dancerModelUrl';
+import { readCachedModel, writeCachedModel } from './dancerModelCache';
 
 export type { DancerModelId } from './dancerCatalog';
 
 const MODEL_FILES: Record<DancerModelId, string> = Object.fromEntries(
   ALL_DANCER_MODEL_IDS.map((id) => [id, `${id}.glb`]),
 ) as Record<DancerModelId, string>;
-
-function randomFrom<T>(items: readonly T[]): T {
-  return items[Math.floor(Math.random() * items.length)];
-}
-
-function pickPhasePair(songPhase: SongPhase): [DancerModelId, DancerModelId] {
-  const leftPool = PHASE_LEFT_POOLS[songPhase];
-  const rightPool = PHASE_RIGHT_POOLS[songPhase];
-  return [randomFrom(leftPool), randomFrom(rightPool)];
-}
 
 interface DancerTemplate {
   base: THREE.Object3D;
@@ -50,9 +45,14 @@ export class StageDancers {
   private rightMixer: THREE.AnimationMixer | null = null;
   private leftModelId: DancerModelId | null = null;
   private rightModelId: DancerModelId | null = null;
-  private lastSongPhase: SongPhase | null = null;
+  private activeClipIndex = 0;
+  private pendingClipIndex = 0;
+  private lastSubPhase: DancerSubPhase | null = null;
+  private pendingSubPhase: DancerSubPhase | null = null;
+  private rotationPlan: Record<DancerSubPhase, DancerModelId> | null = null;
   private perfectDanceActive = false;
   private activePerfectTier: PerfectDancerTier = 0;
+  private maxPerfectTierPlayed: PerfectDancerTier = 0;
   private pendingLoopOnce = false;
   private perfectFinishHandlers: Array<{
     mixer: THREE.AnimationMixer;
@@ -119,16 +119,43 @@ export class StageDancers {
     return promise;
   }
 
-  /** 起動時プリロード（大容量GLBのため逐次読み込み） */
-  async preloadAll(onProgress?: (loaded: number, total: number) => void): Promise<void> {
-    const total = ALL_DANCER_MODEL_IDS.length;
+  /** 指定IDを並列プリロード（同時2本まで） */
+  async preloadIds(
+    ids: readonly DancerModelId[],
+    onProgress?: (loaded: number, total: number) => void,
+    concurrency = 2,
+  ): Promise<void> {
+    const pending = ids.filter((id) => !this.templates.has(id));
+    const total = pending.length;
     onProgress?.(0, total);
+    if (total === 0) return;
+
     let loaded = 0;
-    for (const id of ALL_DANCER_MODEL_IDS) {
-      await this.ensureLoaded(id);
-      loaded++;
-      onProgress?.(loaded, total);
-    }
+    const queue = [...pending];
+
+    const worker = async () => {
+      while (queue.length > 0) {
+        const id = queue.shift();
+        if (!id) break;
+        await this.ensureLoaded(id);
+        loaded++;
+        onProgress?.(loaded, total);
+      }
+    };
+
+    await Promise.all(
+      Array.from({ length: Math.min(concurrency, total) }, () => worker()),
+    );
+  }
+
+  /** 序盤8体をバックグラウンド向けに先読み */
+  preloadEarlyPhase(): Promise<void> {
+    return this.preloadIds([...FIRST_MODELS]);
+  }
+
+  /** 全モデル（デバッグ向け・通常起動では使わない） */
+  async preloadAll(onProgress?: (loaded: number, total: number) => void): Promise<void> {
+    await this.preloadIds(ALL_DANCER_MODEL_IDS, onProgress, 2);
   }
 
   private tryApplyPending(): void {
@@ -142,13 +169,30 @@ export class StageDancers {
     if (
       this.visible
       && this.pendingLeft
-      && this.pendingRight
       && this.templates.has(this.pendingLeft)
-      && this.templates.has(this.pendingRight)
+      && (this.previewMode
+        ? this.pendingRight && this.templates.has(this.pendingRight)
+        : true)
     ) {
       const loopOnce = this.pendingLoopOnce;
       this.pendingLoopOnce = false;
-      this.applyPair(this.pendingLeft, this.pendingRight, { loopOnce });
+      const clipIndex = this.previewMode
+        ? clipIndexFromModelId(this.pendingLeft)
+        : this.pendingClipIndex;
+      const force = !this.previewMode
+        && (
+          this.leftModelId !== this.pendingLeft
+          || this.activeClipIndex !== clipIndex
+          || this.pendingSubPhase !== this.lastSubPhase
+        );
+      this.applyPair(
+        this.pendingLeft,
+        this.pendingRight ?? this.pendingLeft,
+        { loopOnce, force, clipIndex },
+      );
+      if (!this.previewMode && this.pendingSubPhase) {
+        this.lastSubPhase = this.pendingSubPhase;
+      }
       if (this.panelBounds) {
         this.resize(this.screenW, this.screenH, this.panelBounds);
       }
@@ -156,35 +200,48 @@ export class StageDancers {
   }
 
   private modelUrl(id: DancerModelId): string {
-    const file = MODEL_FILES[id];
-    if (import.meta.env.DEV) {
-      return `${import.meta.env.BASE_URL}models/${file}`;
+    return dancerModelUrl(id, MODEL_FILES[id]);
+  }
+
+  private async fetchModelBytes(id: DancerModelId, url: string): Promise<ArrayBuffer | null> {
+    const cached = await readCachedModel(id);
+    if (cached) return cached;
+
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.error('[StageDancers] fetch failed:', url, response.status);
+      return null;
     }
-    return `https://raw.githubusercontent.com/Tatsumaru2016/G-rhythm/main/public/models/${file}`;
+    const data = await response.arrayBuffer();
+    writeCachedModel(id, data);
+    return data;
   }
 
   private loadTemplate(id: DancerModelId): Promise<void> {
     const url = this.modelUrl(id);
-    return new Promise((resolve) => {
-      this.loader.load(
-        url,
-        (gltf) => {
-          const prepared = this.prepareModel(gltf.scene);
-          const size = this.measureStaticSize(prepared);
-          this.templates.set(id, {
-            base: prepared,
-            clips: gltf.animations,
-            height: size.y,
-            width: size.x,
-          });
-          resolve();
-        },
-        undefined,
-        (err) => {
-          console.error('[StageDancers] load failed:', url, err);
-          resolve();
-        },
-      );
+    return this.fetchModelBytes(id, url).then((data) => {
+      if (!data) return;
+      return new Promise<void>((resolve) => {
+        this.loader.parse(
+          data,
+          url,
+          (gltf) => {
+            const prepared = this.prepareModel(gltf.scene);
+            const size = this.measureStaticSize(prepared);
+            this.templates.set(id, {
+              base: prepared,
+              clips: gltf.animations,
+              height: size.y,
+              width: size.x,
+            });
+            resolve();
+          },
+          (err) => {
+            console.error('[StageDancers] parse failed:', url, err);
+            resolve();
+          },
+        );
+      });
     });
   }
 
@@ -265,9 +322,13 @@ export class StageDancers {
     this.activePerfectTier = 0;
     this.leftModelId = null;
     this.rightModelId = null;
+    this.activeClipIndex = 0;
+    this.pendingClipIndex = 0;
     this.pendingLeft = null;
     this.pendingRight = null;
     this.pendingLoopOnce = false;
+    this.lastSubPhase = null;
+    this.pendingSubPhase = null;
     this.clearRoots();
   }
 
@@ -292,6 +353,7 @@ export class StageDancers {
     template: DancerTemplate,
     mirror: boolean,
     loopOnce = false,
+    clipIndex = 0,
   ): THREE.AnimationMixer | null {
     const model = cloneSkeleton(template.base) as THREE.Object3D;
     this.applySilhouette(model);
@@ -305,12 +367,13 @@ export class StageDancers {
     }
     if (template.clips.length > 0) {
       const mixer = new THREE.AnimationMixer(model);
-      const action = mixer.clipAction(template.clips[0]);
+      const idx = Math.min(Math.max(0, clipIndex), template.clips.length - 1);
+      const action = mixer.clipAction(template.clips[idx]);
       if (loopOnce) {
         action.setLoop(THREE.LoopOnce, 1);
         action.clampWhenFinished = true;
       }
-      action.play();
+      action.reset().play();
       if (mirror) this.rightMixer = mixer;
       else this.leftMixer = mixer;
       return mixer;
@@ -321,22 +384,44 @@ export class StageDancers {
   private applyPair(
     leftId: DancerModelId,
     rightId: DancerModelId,
-    options?: { loopOnce?: boolean; force?: boolean },
+    options?: { loopOnce?: boolean; force?: boolean; clipIndex?: number },
   ): void {
-    if (!options?.force && this.leftModelId === leftId && this.rightModelId === rightId) return;
-    const leftTemplate = this.templates.get(leftId);
-    const rightTemplate = this.templates.get(rightId);
-    if (!leftTemplate || !rightTemplate) return;
+    const clipIndex = options?.clipIndex ?? clipIndexFromModelId(leftId);
+
+    if (this.previewMode) {
+      if (!options?.force && this.leftModelId === leftId && this.rightModelId === rightId) return;
+      const leftTemplate = this.templates.get(leftId);
+      const rightTemplate = this.templates.get(rightId);
+      if (!leftTemplate || !rightTemplate) return;
+
+      this.clearRoots();
+      this.mountSide(this.leftRoot, leftTemplate, false, options?.loopOnce, clipIndexFromModelId(leftId));
+      this.mountSide(this.rightRoot, rightTemplate, true, options?.loopOnce, clipIndexFromModelId(rightId));
+      this.leftModelId = leftId;
+      this.rightModelId = rightId;
+      this.activeClipIndex = clipIndexFromModelId(leftId);
+      this.layoutKey = '';
+      return;
+    }
+
+    const dancerId = leftId;
+    if (
+      !options?.force
+      && this.leftModelId === dancerId
+      && this.rightModelId === null
+      && this.activeClipIndex === clipIndex
+    ) {
+      return;
+    }
+    const template = this.templates.get(dancerId);
+    if (!template) return;
 
     this.clearRoots();
-    const leftMixer = this.mountSide(this.leftRoot, leftTemplate, false, options?.loopOnce);
-    const rightMixer = this.mountSide(this.rightRoot, rightTemplate, true, options?.loopOnce);
-    if (options?.loopOnce) {
-      const finishMixer = leftMixer ?? rightMixer;
-      if (finishMixer) this.bindPerfectFinish(finishMixer);
-    }
-    this.leftModelId = leftId;
-    this.rightModelId = rightId;
+    const mixer = this.mountSide(this.leftRoot, template, false, options?.loopOnce, clipIndex);
+    if (options?.loopOnce && mixer) this.bindPerfectFinish(mixer);
+    this.leftModelId = dancerId;
+    this.rightModelId = null;
+    this.activeClipIndex = clipIndex;
     this.layoutKey = '';
   }
 
@@ -344,22 +429,40 @@ export class StageDancers {
     const id = perfectModelForTier(tier);
     this.perfectDanceActive = true;
     this.activePerfectTier = tier;
+    this.maxPerfectTierPlayed = tier;
     this.pendingLeft = id;
-    this.pendingRight = id;
+    this.pendingRight = this.previewMode ? id : null;
     this.pendingLoopOnce = true;
     this.queueLoad(id);
     if (this.templates.has(id)) {
       this.pendingLoopOnce = false;
-      const force = this.leftModelId === id && this.rightModelId === id;
+      const force = this.leftModelId === id
+        && this.rightModelId === (this.previewMode ? id : null);
       this.applyPair(id, id, { loopOnce: true, force });
     }
   }
 
-  private pickPair(songPhase: SongPhase): [DancerModelId, DancerModelId] {
-    return pickPhasePair(songPhase);
+  private beginRotation(): void {
+    this.rotationPlan = createDancerRotationPlan();
+    this.lastSubPhase = null;
+    this.pendingSubPhase = null;
+    this.pendingClipIndex = 0;
+    this.activeClipIndex = 0;
+    this.maxPerfectTierPlayed = 0;
+    this.leftModelId = null;
+    this.rightModelId = null;
+    this.pendingLeft = null;
+    this.pendingRight = null;
+    this.clearRoots();
+
+    const ids = new Set(Object.values(this.rotationPlan));
+    for (const phase of ['early', 'mid', 'late'] as SongPhase[]) {
+      for (const id of PHASE_MODEL_POOLS[phase]) ids.add(id);
+    }
+    for (const id of ids) this.queueLoad(id);
   }
 
-  private ensureModels(songPhase: SongPhase, perfectBoost: number): void {
+  private ensureModels(subPhase: DancerSubPhase, perfectBoost: number): void {
     const targetTier = getPerfectDancerTier(perfectBoost);
 
     if (this.perfectDanceActive) {
@@ -369,41 +472,44 @@ export class StageDancers {
       return;
     }
 
-    if (targetTier > 0) {
-      this.lastSongPhase = songPhase;
+    if (targetTier > this.maxPerfectTierPlayed) {
+      this.pendingSubPhase = subPhase;
       this.switchToPerfectTier(targetTier as 1 | 2 | 3 | 4);
       return;
     }
 
-    const phaseChanged = this.lastSongPhase !== songPhase;
-    const mounted = this.leftRoot.children.length > 0 && this.rightRoot.children.length > 0;
+    const plan = this.rotationPlan;
+    if (!plan) return;
 
-    if (!phaseChanged && mounted && this.leftModelId && this.rightModelId) {
+    const desiredId = plan[subPhase];
+    const desiredClip = clipIndexFromModelId(desiredId);
+    const mounted = this.leftRoot.children.length > 0;
+    if (
+      mounted
+      && this.lastSubPhase === subPhase
+      && this.leftModelId === desiredId
+      && this.activeClipIndex === desiredClip
+    ) {
       return;
     }
 
-    if (phaseChanged || !this.pendingLeft || !this.pendingRight) {
-      const [leftId, rightId] = this.pickPair(songPhase);
-      this.pendingLeft = leftId;
-      this.pendingRight = rightId;
-      this.pendingLoopOnce = false;
-      this.lastSongPhase = songPhase;
-    }
+    this.pendingLeft = desiredId;
+    this.pendingRight = null;
+    this.pendingClipIndex = desiredClip;
+    this.pendingLoopOnce = false;
+    this.pendingSubPhase = subPhase;
+    this.queueLoad(desiredId);
 
-    this.queueLoad(this.pendingLeft);
-    this.queueLoad(this.pendingRight);
-
-    if (
-      this.templates.has(this.pendingLeft)
-      && this.templates.has(this.pendingRight)
-    ) {
-      this.applyPair(this.pendingLeft, this.pendingRight);
+    if (this.templates.has(desiredId)) {
+      this.applyPair(desiredId, desiredId, { force: true, clipIndex: desiredClip });
+      this.lastSubPhase = subPhase;
     }
   }
 
   show(): void {
     this.visible = true;
     this.layer.classList.remove('hidden');
+    this.beginRotation();
   }
 
   getCanvas(): HTMLCanvasElement {
@@ -416,12 +522,17 @@ export class StageDancers {
     this.layer.classList.add('hidden');
     this.leftModelId = null;
     this.rightModelId = null;
+    this.activeClipIndex = 0;
+    this.pendingClipIndex = 0;
     this.pendingLeft = null;
     this.pendingRight = null;
     this.pendingLoopOnce = false;
-    this.lastSongPhase = null;
+    this.lastSubPhase = null;
+    this.pendingSubPhase = null;
+    this.rotationPlan = null;
     this.perfectDanceActive = false;
     this.activePerfectTier = 0;
+    this.maxPerfectTierPlayed = 0;
     this.unbindPerfectFinishHandlers();
     this.layoutKey = '';
     this.clearRoots();
@@ -431,10 +542,14 @@ export class StageDancers {
     this.previewMode = true;
     this.previewLeft = leftId;
     this.previewRight = rightId;
-    this.lastSongPhase = null;
+    this.lastSubPhase = null;
+    this.pendingSubPhase = null;
+    this.rotationPlan = null;
     this.perfectDanceActive = false;
     this.activePerfectTier = 0;
-    this.show();
+    this.maxPerfectTierPlayed = 0;
+    this.visible = true;
+    this.layer.classList.remove('hidden');
     this.pendingLeft = leftId;
     this.pendingRight = rightId;
     this.queueLoad(leftId);
@@ -494,51 +609,59 @@ export class StageDancers {
     root: THREE.Group,
     centerX: number,
     maxWidth: number,
-    footWorldY: number,
+    anchorCanvasY: number,
     targetHeight: number,
     template: DancerTemplate,
+    anchor: 'feet' | 'center' = 'feet',
   ): void {
     const modelH = Math.max(template.height, 0.01);
     const modelW = Math.max(template.width, 0.01);
     let scale = targetHeight / modelH;
     if (modelW * scale > maxWidth) scale = maxWidth / modelW;
+    const scaledH = modelH * scale;
     root.scale.setScalar(scale);
-    root.position.set(centerX, footWorldY, 0);
+    const footCanvasY = anchor === 'feet' ? anchorCanvasY : anchorCanvasY + scaledH * 0.5;
+    root.position.set(centerX, this.toWorldY(footCanvasY), 0);
   }
 
   private layoutDancers(bounds: LaneBounds): void {
     const leftTemplate = this.leftModelId ? this.templates.get(this.leftModelId) : null;
-    const rightTemplate = this.rightModelId ? this.templates.get(this.rightModelId) : null;
-    if (!leftTemplate || !rightTemplate) return;
+    if (!leftTemplate) return;
 
-    const laneEnd = bounds.startX + bounds.width;
-    const footWorldY = this.toWorldY(bounds.hitLineY - 4);
     const availH = Math.max(100, bounds.hitLineY - bounds.topY);
-    const targetHeight = availH * 0.8;
 
-    const leftW = Math.max(56, bounds.startX);
-    const rightW = Math.max(56, this.screenW - laneEnd);
+    if (this.previewMode) {
+      const rightTemplate = this.rightModelId ? this.templates.get(this.rightModelId) : null;
+      if (!rightTemplate) return;
+      const targetHeight = availH * 0.82;
+      const footCanvasY = bounds.hitLineY - 4;
+      this.rightRoot.visible = true;
+      this.placeDancer(this.leftRoot, this.screenW * 0.26, this.screenW * 0.22, footCanvasY, targetHeight, leftTemplate);
+      this.placeDancer(this.rightRoot, this.screenW * 0.74, this.screenW * 0.22, footCanvasY, targetHeight, rightTemplate);
+      return;
+    }
 
-    this.placeDancer(this.leftRoot, leftW * 0.5, leftW * 0.92, footWorldY, targetHeight, leftTemplate);
+    this.rightRoot.visible = false;
+    const laneEnd = bounds.startX + bounds.width;
+    const stageW = Math.max(120, this.screenW - laneEnd);
+    const centerX = laneEnd + stageW * 0.5;
+    const stageCenterCanvasY = bounds.topY + availH * 0.5 + 40;
+    const targetHeight = availH * 0.78;
     this.placeDancer(
-      this.rightRoot,
-      laneEnd + rightW * 0.5,
-      rightW * 0.92,
-      footWorldY,
-      targetHeight,
-      rightTemplate,
+      this.leftRoot, centerX, stageW * 0.88, stageCenterCanvasY, targetHeight, leftTemplate, 'center',
     );
   }
 
   private update(dt: number): void {
     this.leftMixer?.update(dt);
-    this.rightMixer?.update(dt);
+    if (this.previewMode) this.rightMixer?.update(dt);
   }
 
   render(
     dt: number,
     bounds: LaneBounds,
-    songPhase: SongPhase,
+    currentTime: number,
+    songDuration: number,
     perfectBoost: number,
     screenW: number,
     screenH: number,
@@ -551,15 +674,21 @@ export class StageDancers {
 
     this.panelBounds = bounds;
     if (!this.previewMode) {
-      this.ensureModels(songPhase, perfectBoost);
+      const subPhase = getDancerSubPhase(currentTime, songDuration);
+      this.ensureModels(subPhase, perfectBoost);
     }
 
-    if (!this.leftModelId || !this.rightModelId) return;
-    if (this.leftRoot.children.length === 0 || this.rightRoot.children.length === 0) return;
+    if (!this.leftModelId) return;
+    if (this.previewMode) {
+      if (!this.rightModelId) return;
+      if (this.leftRoot.children.length === 0 || this.rightRoot.children.length === 0) return;
+    } else if (this.leftRoot.children.length === 0) {
+      return;
+    }
 
     const layoutKey = [
       bounds.startX, bounds.width, bounds.hitLineY, bounds.topY,
-      screenW, screenH, this.leftModelId, this.rightModelId,
+      screenW, screenH, this.leftModelId, this.rightModelId ?? 'solo', this.previewMode ? 'preview' : 'play',
     ].join('|');
 
     if (layoutKey !== this.layoutKey) {

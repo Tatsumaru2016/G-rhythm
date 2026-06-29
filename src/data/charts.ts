@@ -2,12 +2,23 @@ import type { ChartData, GameStats } from '../types';
 import chartNeonPulse from '../charts/neon-pulse.json';
 import chartStarfall from '../charts/starfall.json';
 import chartVelocity from '../charts/velocity.json';
+import { syncBuiltinChartFromAudio } from './builtinChartSync';
 
 export const CHARTS: ChartData[] = [
   chartNeonPulse as ChartData,
   chartStarfall as ChartData,
   chartVelocity as ChartData,
 ];
+
+/** 読み込んだ内蔵曲 MP3 から BPM / NOTES / LV を反映 */
+export function applyBuiltinAudioSync(buffers: ReadonlyMap<string, AudioBuffer>): void {
+  for (let i = 0; i < CHARTS.length; i++) {
+    const chart = CHARTS[i];
+    const buffer = buffers.get(chart.id);
+    if (!buffer) continue;
+    CHARTS[i] = syncBuiltinChartFromAudio(chart, buffer);
+  }
+}
 
 export function getRank(stats: GameStats, maxNotes: number): string {
   const total = stats.perfect + stats.great + stats.good + stats.bad + stats.miss;

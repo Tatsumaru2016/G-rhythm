@@ -7,10 +7,13 @@
     "dev": "vite",
     "build": "vite build && node scripts/strip-deploy-models.mjs",
     "build:check": "tsc && vite build",
+    "sync:charts": "tsx scripts/sync-builtin-charts.ts",
     "preview": "vite preview"
   },
   "devDependencies": {
     "@types/three": "^0.185.0",
+    "audio-decode": "^3.11.0",
+    "tsx": "^4.22.4",
     "typescript": "^5.7.2",
     "vite": "^6.0.3"
   },

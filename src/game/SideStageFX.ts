@@ -183,11 +183,11 @@ export class SideStageFX {
     this.pairing = pick.pairing;
   }
 
-  private sidePanels(screenW: number, screenH: number, bounds: LaneBounds): { left: SidePanel; right: SidePanel } {
+  private sidePanels(screenW: number, _screenH: number, bounds: LaneBounds): { left: SidePanel; right: SidePanel } {
     const laneEnd = bounds.startX + bounds.width;
     return {
-      left: { x: 0, y: 0, w: bounds.startX, h: screenH },
-      right: { x: laneEnd, y: 0, w: screenW - laneEnd, h: screenH },
+      left: { x: 0, y: 0, w: 0, h: 0 },
+      right: { x: laneEnd, y: 0, w: screenW - laneEnd, h: _screenH },
     };
   }
 
@@ -301,14 +301,14 @@ export class SideStageFX {
 
   private hitCenters(screenW: number, screenH: number, bounds?: LaneBounds): { x: number; y: number }[] {
     const b = bounds ?? this.lastBounds;
-    if (!b || b.startX < 16) {
-      return [{ x: screenW * 0.5, y: screenH * 0.5 }];
+    if (!b) {
+      return [{ x: screenW * 0.72, y: screenH * 0.5 }];
     }
     const panels = this.sidePanels(screenW, screenH, b);
-    const out: { x: number; y: number }[] = [];
-    if (panels.left.w > 16) out.push(this.panelCenter(panels.left));
-    if (panels.right.w > 16) out.push(this.panelCenter(panels.right));
-    return out.length > 0 ? out : [{ x: screenW * 0.5, y: screenH * 0.5 }];
+    if (panels.right.w > 16) {
+      return [this.panelCenter(panels.right)];
+    }
+    return [{ x: b.startX + b.width * 0.5, y: screenH * 0.5 }];
   }
 
   private spawnJudgmentBurst(screenW: number, screenH: number, judgment: JudgmentType, bounds?: LaneBounds) {
@@ -479,7 +479,7 @@ export class SideStageFX {
     }
   }
 
-  /** 左右マージンに独立した演出を描画（中央プレイフィールドは除外） */
+  /** レーン右のステージエリアに演出を描画 */
   draw(
     ctx: CanvasRenderingContext2D,
     screenW: number,
@@ -505,9 +505,6 @@ export class SideStageFX {
     ctx.globalCompositeOperation = 'screen';
     ctx.globalAlpha *= bright;
 
-    if (panels.left.w > 12) {
-      this.drawSidePanel(ctx, panels.left, this.leftPattern, drawSync, palette, 'left');
-    }
     if (panels.right.w > 12) {
       this.drawSidePanel(ctx, panels.right, this.rightPattern, drawSync, palette, 'right');
     }

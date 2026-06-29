@@ -1,7 +1,10 @@
 import { AudioEngine } from './AudioEngine';
 import { analyzeGenre, getGenreLabel } from './musicGenre';
 import { generateChart, estimateBpm, type CustomDifficulty } from './AutoChartGenerator';
+import { titleFromFileName } from './customAudioExtensions';
 import type { ChartData, MusicGenre } from '../types';
+
+export type CustomImportMode = 'single' | 'folder';
 
 export interface CustomSongMeta {
   title: string;
@@ -12,11 +15,22 @@ export interface CustomSongMeta {
   genreConfidence: number;
 }
 
+export interface CustomTrackEntry {
+  id: string;
+  title: string;
+  file: File;
+}
+
 export class CustomSongLoader {
   private buffer: AudioBuffer | null = null;
   private fileName = '';
   private genre: MusicGenre = 'other';
   private genreConfidence = 0;
+  private importMode: CustomImportMode | null = null;
+  private catalog: CustomTrackEntry[] = [];
+  private selectedIndex = 0;
+  private folderLabel = '';
+  private bufferCache = new Map<string, AudioBuffer>();
 
   constructor(private audio: AudioEngine) {}
 
@@ -28,12 +42,77 @@ export class CustomSongLoader {
     return this.genre;
   }
 
+  getImportMode(): CustomImportMode | null {
+    return this.importMode;
+  }
+
+  isFolderMode(): boolean {
+    return this.importMode === 'folder';
+  }
+
+  getCatalog(): readonly CustomTrackEntry[] {
+    return this.catalog;
+  }
+
+  getSelectedIndex(): number {
+    return this.selectedIndex;
+  }
+
+  setSelectedIndex(index: number): void {
+    if (!this.catalog.length) return;
+    this.selectedIndex = ((index % this.catalog.length) + this.catalog.length) % this.catalog.length;
+  }
+
+  getFolderLabel(): string {
+    return this.folderLabel;
+  }
+
+  setCatalogFromFiles(files: File[], folderLabel = ''): CustomTrackEntry[] {
+    this.importMode = 'folder';
+    this.folderLabel = folderLabel;
+    this.catalog = files.map((file, index) => ({
+      id: `custom-folder-${index}-${file.name}`,
+      title: titleFromFileName(file.name),
+      file,
+    }));
+    this.selectedIndex = 0;
+    this.buffer = null;
+    this.fileName = '';
+    this.bufferCache.clear();
+    return this.catalog;
+  }
+
   async loadFile(file: File): Promise<CustomSongMeta> {
+    this.importMode = 'single';
+    this.catalog = [];
+    this.selectedIndex = 0;
+    this.bufferCache.clear();
+    return this.decodeFile(file);
+  }
+
+  async selectTrack(index: number): Promise<CustomSongMeta> {
+    if (!this.catalog.length) throw new Error('No catalog');
+    const wrapped = ((index % this.catalog.length) + this.catalog.length) % this.catalog.length;
+    this.selectedIndex = wrapped;
+    return this.decodeFile(this.catalog[wrapped].file);
+  }
+
+  private trackCacheKey(file: File): string {
+    return `${file.name}:${file.size}:${file.lastModified}`;
+  }
+
+  private async decodeFile(file: File): Promise<CustomSongMeta> {
     await this.audio.resume();
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = await this.audio.decodeArrayBuffer(arrayBuffer);
+    const cacheKey = this.trackCacheKey(file);
+    let buffer = this.bufferCache.get(cacheKey);
+    if (!buffer) {
+      const arrayBuffer = await file.arrayBuffer();
+      buffer = await this.audio.decodeArrayBuffer(arrayBuffer);
+      this.bufferCache.set(cacheKey, buffer);
+    }
+
     this.buffer = buffer;
-    this.fileName = file.name.replace(/\.[^.]+$/, '');
+    this.fileName = titleFromFileName(file.name);
 
     const analysis = analyzeGenre(buffer);
     this.genre = analysis.genre;
@@ -70,6 +149,11 @@ export class CustomSongLoader {
     this.fileName = '';
     this.genre = 'other';
     this.genreConfidence = 0;
+    this.importMode = null;
+    this.catalog = [];
+    this.selectedIndex = 0;
+    this.folderLabel = '';
+    this.bufferCache.clear();
     this.audio.clearUserBuffer();
   }
 }

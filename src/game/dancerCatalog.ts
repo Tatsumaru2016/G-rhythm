@@ -1,4 +1,5 @@
 import type { SongPhase } from './scrollPhase';
+import type { DancerSubPhase } from './scrollPhase';
 
 function range(prefix: string, from: number, to: number): `${typeof prefix}${string}`[] {
   const out: string[] = [];
@@ -24,18 +25,52 @@ export const PERFECT_MODELS = range('d_p', 1, 4) as readonly [
   'd_p01', 'd_p02', 'd_p03', 'd_p04',
 ];
 
-/** 序盤/中盤/終盤ごとに左4・右4へ分割 */
+/** @deprecated プレビュー用。本番プレイは createDancerRotationPlan を使用 */
 export const PHASE_LEFT_POOLS: Record<SongPhase, readonly DancerModelId[]> = {
   early: ['d_f01', 'd_f02', 'd_f03', 'd_f04'],
   mid: ['d_m01', 'd_m02', 'd_m03', 'd_m04'],
   late: ['d_e01', 'd_e02', 'd_e03', 'd_e04'],
 };
 
+/** @deprecated プレビュー用 */
 export const PHASE_RIGHT_POOLS: Record<SongPhase, readonly DancerModelId[]> = {
   early: ['d_f05', 'd_f06', 'd_f07', 'd_f08'],
   mid: ['d_m05', 'd_m06', 'd_m07', 'd_m08'],
   late: ['d_e05', 'd_e06', 'd_e07', 'd_e08'],
 };
+
+export const PHASE_MODEL_POOLS: Record<SongPhase, readonly DancerModelId[]> = {
+  early: FIRST_MODELS,
+  mid: MID_MODELS,
+  late: END_MODELS,
+};
+
+const SUB_PHASES_BY_SONG_PHASE: Record<SongPhase, readonly DancerSubPhase[]> = {
+  early: ['early1', 'early2', 'early3', 'early4'],
+  mid: ['mid1', 'mid2', 'mid3', 'mid4'],
+  late: ['late1', 'late2', 'late3', 'late4'],
+};
+
+function shufflePick<T>(pool: readonly T[], count: number): T[] {
+  const arr = [...pool];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr.slice(0, count);
+}
+
+/** 序盤/中盤/終盤それぞれ8種から4種をランダムに割り当て */
+export function createDancerRotationPlan(): Record<DancerSubPhase, DancerModelId> {
+  const plan = {} as Record<DancerSubPhase, DancerModelId>;
+  for (const phase of ['early', 'mid', 'late'] as SongPhase[]) {
+    const picks = shufflePick(PHASE_MODEL_POOLS[phase], 4);
+    SUB_PHASES_BY_SONG_PHASE[phase].forEach((sub, index) => {
+      plan[sub] = picks[index];
+    });
+  }
+  return plan;
+}
 
 export type DancerModelId =
   | (typeof FIRST_MODELS)[number]
@@ -92,4 +127,10 @@ export const DEFAULT_DANCER_PREVIEW_PAIR: [DancerModelId, DancerModelId] = [
 
 export function dancerModelLabel(id: DancerModelId): string {
   return id.replace(/^d_/, '');
+}
+
+/** モデルID末尾の番号（01〜08）をクリップインデックス（0〜7）へ */
+export function clipIndexFromModelId(id: DancerModelId): number {
+  const n = parseInt(id.slice(-2), 10);
+  return Number.isFinite(n) ? Math.max(0, n - 1) : 0;
 }

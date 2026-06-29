@@ -1,6 +1,7 @@
 import './styles.css';
-import { initLocale, t } from './i18n';
+import { initLocale } from './i18n';
 import { AudioEngine } from './audio/AudioEngine';
+import { BuiltinSongAudio } from './audio/BuiltinSongAudio';
 import { CustomSongLoader } from './audio/CustomSongLoader';
 import { Game } from './game/Game';
 import { UIManager } from './ui/UIManager';
@@ -14,9 +15,20 @@ async function main() {
   const playHud = document.getElementById('play-hud') as HTMLElement;
   const audio = new AudioEngine();
   const customLoader = new CustomSongLoader(audio);
+  const builtinAudio = new BuiltinSongAudio();
 
   let game: Game;
   let touchZones: HTMLElement[] = [];
+
+  const prepareChartAudio = (chart: ChartData): ChartData => {
+    if (chart.customAudio) {
+      audio.clearChartBuffer();
+      return chart;
+    }
+    customLoader.clear();
+    audio.setChartBuffer(builtinAudio.getBuffer(chart.id));
+    return builtinAudio.withAudioDuration(chart);
+  };
 
   const endGameplay = () => {
     game.stop();
@@ -32,15 +44,15 @@ async function main() {
     async (chart: ChartData) => {
       ui.prepareForGameplay();
       await audio.resume();
-      if (!chart.customAudio) customLoader.clear();
+      const playChart = prepareChartAudio(chart);
       game.setScrollSpeed(ui.getScrollSpeed());
       game.setReducedFlash(ui.getReducedFlash());
       game.setDebugStageFxPattern(ui.getDebugStageFxPatternOverride());
-      ui.showCountdownOverlay(chart);
-      touchZones = ui.showTouchZones();
+      ui.showCountdownOverlay(playChart);
+      touchZones = ui.showTouchZones(() => game.getTouchZoneLayout());
       ui.showPlayHud();
       game.bindTouchZones(touchZones);
-      game.start(chart);
+      game.start(playChart);
     },
     () => endGameplay(),
     () => {
@@ -69,11 +81,12 @@ async function main() {
     },
   });
 
-  ui.showLoading(t('ui.loadingModels'));
-  await game.preloadDancerModels((loaded, total) => {
-    ui.updateLoadingProgress(loaded, total);
-  });
+  ui.showLoading('ui.loadingModels');
+  await builtinAudio.preloadAll(audio);
   ui.showTitle();
+  void game.preloadDancerModels((loaded, total) => {
+    ui.updateBackgroundLoadProgress(loaded, total);
+  });
 
   document.addEventListener('visibilitychange', () => {
     if (document.hidden && game.getPhase() === 'playing') {

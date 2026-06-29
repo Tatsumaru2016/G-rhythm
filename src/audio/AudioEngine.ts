@@ -36,7 +36,15 @@ export class AudioEngine {
   private chart: ChartData | null = null;
   private musicEndCallback: (() => void) | null = null;
   private userBuffer: AudioBuffer | null = null;
+  private chartBuffer: AudioBuffer | null = null;
+  private previewPlaybackBuffer: AudioBuffer | null = null;
   private userSource: AudioBufferSourceNode | null = null;
+  private previewSource: AudioBufferSourceNode | null = null;
+  private previewLoop = true;
+  private previewOffset = 0;
+  private previewStartedAt = 0;
+  private previewPaused = false;
+  private previewEnabled = true;
 
   async decodeArrayBuffer(arrayBuffer: ArrayBuffer): Promise<AudioBuffer> {
     await this.init();
@@ -49,6 +57,23 @@ export class AudioEngine {
 
   clearUserBuffer(): void {
     this.userBuffer = null;
+  }
+
+  setChartBuffer(buffer: AudioBuffer | null): void {
+    this.chartBuffer = buffer;
+  }
+
+  clearChartBuffer(): void {
+    this.chartBuffer = null;
+  }
+
+  async loadTrackFromUrl(url: string): Promise<AudioBuffer> {
+    await this.init();
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`[AudioEngine] failed to load track: ${url}`);
+    }
+    return this.decodeArrayBuffer(await response.arrayBuffer());
   }
 
   hasUserBuffer(): boolean {
@@ -98,6 +123,123 @@ export class AudioEngine {
 
   isPlaying(): boolean {
     return this.playing;
+  }
+
+  isPreviewPlaying(): boolean {
+    return this.previewSource !== null && !this.previewPaused;
+  }
+
+  isPreviewPaused(): boolean {
+    return this.previewPaused;
+  }
+
+  isUserPreviewActive(): boolean {
+    return this.previewSource !== null && !this.previewPaused;
+  }
+
+  isPreviewEnabled(): boolean {
+    return this.previewEnabled;
+  }
+
+  playUserPreview(loop = true): void {
+    this.previewEnabled = true;
+    void this.startUserPreview(loop, 0);
+  }
+
+  async startUserPreview(loop = true, offset = 0): Promise<void> {
+    if (!this.previewEnabled) return;
+    if (!this.userBuffer) return;
+    this.previewPlaybackBuffer = this.userBuffer;
+    await this.startBufferPreview(this.userBuffer, loop, offset);
+  }
+
+  async startBufferPreview(buffer: AudioBuffer, loop = true, offset = 0): Promise<void> {
+    this.previewEnabled = true;
+    this.previewPlaybackBuffer = buffer;
+    await this.resume();
+    if (!this.ctx || !this.musicGain) return;
+    this.clearPreviewSource();
+    this.previewLoop = loop;
+    this.previewOffset = offset;
+    this.previewPaused = false;
+    this.spawnPreviewSource(offset);
+  }
+
+  private getActivePreviewBuffer(): AudioBuffer | null {
+    return this.previewPlaybackBuffer ?? this.userBuffer;
+  }
+
+  private spawnPreviewSource(offset: number): void {
+    const buffer = this.getActivePreviewBuffer();
+    if (!this.ctx || !this.musicGain || !buffer) return;
+
+    this.musicGain.gain.value = 0.85;
+    const source = this.ctx.createBufferSource();
+    source.buffer = buffer;
+    source.loop = this.previewLoop;
+    source.connect(this.musicGain);
+    source.onended = () => {
+      if (!this.previewLoop) {
+        this.previewSource = null;
+        this.previewPaused = false;
+      }
+    };
+
+    const safeOffset = Math.max(0, Math.min(offset, Math.max(0, buffer.duration - 0.01)));
+    source.start(0, safeOffset);
+    this.previewStartedAt = this.ctx.currentTime - safeOffset;
+    this.previewSource = source;
+  }
+
+  pauseUserPreview(): void {
+    const buffer = this.getActivePreviewBuffer();
+    if (this.previewSource && this.ctx && buffer) {
+      const elapsed = this.ctx.currentTime - this.previewStartedAt;
+      this.previewOffset = this.previewLoop
+        ? elapsed % buffer.duration
+        : Math.min(Math.max(0, elapsed), buffer.duration);
+    }
+    this.clearPreviewSource();
+    this.previewPaused = false;
+    this.previewEnabled = false;
+  }
+
+  resumeUserPreview(): void {
+    const buffer = this.getActivePreviewBuffer();
+    if (!this.previewEnabled || !this.previewPaused || !buffer) return;
+    void this.startBufferPreview(buffer, this.previewLoop, this.previewOffset);
+  }
+
+  async toggleUserPreview(): Promise<void> {
+    if (this.isUserPreviewActive()) {
+      this.pauseUserPreview();
+      return;
+    }
+    this.previewEnabled = true;
+    const buffer = this.getActivePreviewBuffer();
+    if (!buffer) return;
+    await this.startBufferPreview(buffer, this.previewLoop, this.previewOffset);
+  }
+
+  /** 曲切り替え時: 再生だけ止め、ON/OFFの選択は維持 */
+  stopPreviewPlayback(): void {
+    this.clearPreviewSource();
+    this.previewPaused = false;
+  }
+
+  stopUserPreview(): void {
+    this.clearPreviewSource();
+    this.previewPaused = false;
+    this.previewEnabled = true;
+    this.previewOffset = 0;
+  }
+
+  private clearPreviewSource(): void {
+    if (!this.previewSource) return;
+    try {
+      this.previewSource.stop();
+    } catch { /* already stopped */ }
+    this.previewSource = null;
   }
 
   getAudioReactive(): AudioReactive {
@@ -214,14 +356,16 @@ export class AudioEngine {
     this.resetAudioReactive();
 
     if (chart.customAudio && this.userBuffer) {
-      this.playUserBuffer(chart);
+      this.playBuffer(this.userBuffer, chart);
+    } else if (this.chartBuffer) {
+      this.playBuffer(this.chartBuffer, chart);
     } else {
       this.playProcedural(chart);
     }
   }
 
-  private playUserBuffer(chart: ChartData): void {
-    if (!this.ctx || !this.musicGain || !this.userBuffer) return;
+  private playBuffer(buffer: AudioBuffer, chart: ChartData): void {
+    if (!this.ctx || !this.musicGain) return;
     this.playing = true;
     this.startTime = this.ctx.currentTime + 0.1;
     const startAt = this.startTime + chart.offset;
@@ -229,7 +373,7 @@ export class AudioEngine {
     this.musicGain.gain.value = 0.85;
 
     const source = this.ctx.createBufferSource();
-    source.buffer = this.userBuffer;
+    source.buffer = buffer;
     source.connect(this.musicGain);
     source.start(startAt, 0);
     source.onended = () => {
@@ -254,6 +398,7 @@ export class AudioEngine {
   }
 
   stop(): void {
+    this.stopUserPreview();
     for (const node of this.scheduledNodes) {
       try { node.stop(); } catch { /* already stopped */ }
     }

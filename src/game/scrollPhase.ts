@@ -35,10 +35,17 @@ export function getSongPhase(time: number, duration: number): SongPhase {
   return 'late';
 }
 
-/** ダンサー用の内部サブフェーズ（UI表記の序盤/中盤/終盤は SongPhase のまま） */
-export type DancerSubPhase = 'early1' | 'early2' | 'mid1' | 'mid2' | 'late1' | 'late2';
+/** ダンサー用サブフェーズ（序盤/中盤/終盤を各4分割 = 12区間） */
+export type DancerSubPhase =
+  | 'early1' | 'early2' | 'early3' | 'early4'
+  | 'mid1' | 'mid2' | 'mid3' | 'mid4'
+  | 'late1' | 'late2' | 'late3' | 'late4';
 
-const DANCER_SUB_PHASES: DancerSubPhase[] = ['early1', 'early2', 'mid1', 'mid2', 'late1', 'late2'];
+const DANCER_SUB_PHASES: DancerSubPhase[] = [
+  'early1', 'early2', 'early3', 'early4',
+  'mid1', 'mid2', 'mid3', 'mid4',
+  'late1', 'late2', 'late3', 'late4',
+];
 
 export function getDancerSubPhase(time: number, duration: number): DancerSubPhase {
   if (duration <= 0) return 'early1';

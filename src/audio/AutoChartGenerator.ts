@@ -1,4 +1,5 @@
 import type { ChartData, ChartNote, LaneIndex, MusicGenre } from '../types';
+import { chartDisplayLevel } from '../chart/chartRadar';
 import {
   analyzeGenre,
   getGenreChartModifiers,
@@ -244,9 +245,7 @@ export function generateChart(
 
   notes.sort((a, b) => a.beat - b.beat);
 
-  const level = Math.min(15, Math.max(1, Math.round(notes.length / 15) + cfg.levelBonus));
-
-  return {
+  const draft: ChartData = {
     id: `custom-${Date.now()}`,
     title,
     artist: 'Custom Track',
@@ -254,10 +253,16 @@ export function generateChart(
     offset,
     lpb,
     difficulty,
-    level,
+    level: 1,
     notes,
     customAudio: true,
     audioDuration: buffer.duration,
     genre,
+  };
+  const level = chartDisplayLevel(draft);
+
+  return {
+    ...draft,
+    level,
   };
 }

@@ -1,6 +1,7 @@
 const DB_NAME = 'g-rhythm-storage';
 const STORE_NAME = 'handles';
 const FILE_HANDLE_KEY = 'custom-music-last-file';
+const FOLDER_HANDLE_KEY = 'custom-music-last-folder';
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -40,6 +41,16 @@ async function ensureReadPermission(handle: FileSystemHandle): Promise<boolean> 
   return false;
 }
 
+export class CustomFolderEmptyError extends Error {
+  readonly folderName: string;
+
+  constructor(folderName: string) {
+    super('Custom folder has no audio files');
+    this.name = 'CustomFolderEmptyError';
+    this.folderName = folderName;
+  }
+}
+
 export async function loadLastCustomMusicFileHandle(): Promise<FileSystemFileHandle | null> {
   try {
     const handle = await idbGet<FileSystemFileHandle>(FILE_HANDLE_KEY);
@@ -54,5 +65,25 @@ export async function loadLastCustomMusicFileHandle(): Promise<FileSystemFileHan
 export async function saveLastCustomMusicFileHandle(handle: FileSystemFileHandle): Promise<void> {
   try {
     await idbSet(FILE_HANDLE_KEY, handle);
+  } catch { /* ignore */ }
+}
+
+export async function loadLastCustomMusicFolderHandle(
+  options?: { requirePermission?: boolean },
+): Promise<FileSystemDirectoryHandle | null> {
+  try {
+    const handle = await idbGet<FileSystemDirectoryHandle>(FOLDER_HANDLE_KEY);
+    if (!handle || handle.kind !== 'directory') return null;
+    if (options?.requirePermission === false) return handle;
+    if (!(await ensureReadPermission(handle))) return null;
+    return handle;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveLastCustomMusicFolderHandle(handle: FileSystemDirectoryHandle): Promise<void> {
+  try {
+    await idbSet(FOLDER_HANDLE_KEY, handle);
   } catch { /* ignore */ }
 }

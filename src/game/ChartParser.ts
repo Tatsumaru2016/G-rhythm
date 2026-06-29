@@ -64,6 +64,19 @@ export function getSongDuration(chart: ChartData): number {
   return noteEnd;
 }
 
+/** ダンサー切替用（譜面終端ベース。長い無音区間の MP3 長さは使わない） */
+export function getDancerRotationDuration(chart: ChartData): number {
+  let maxTime = chart.offset + 4;
+  for (const note of chart.notes) {
+    const start = beatToTime(note.beat / chart.lpb, chart);
+    const end = note.type === 'hold' && note.duration
+      ? beatToTime((note.beat + note.duration) / chart.lpb, chart)
+      : start;
+    maxTime = Math.max(maxTime, end);
+  }
+  return maxTime + 3;
+}
+
 export function validateNote(note: ChartNote): boolean {
   return note.lane >= 0 && note.lane <= 3;
 }
