@@ -68,6 +68,42 @@ async function openDirectoryPicker(startIn?: FileSystemHandle): Promise<FileSyst
   return window.showDirectoryPicker!(options);
 }
 
+function sortAudioFiles(files: File[]): File[] {
+  return files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+}
+
+async function readAudioFilesFromFolderHandle(
+  handle: FileSystemDirectoryHandle,
+): Promise<CustomAudioFolderPick | null> {
+  const files = sortAudioFiles(await collectAudioFilesFromDirectory(handle));
+  if (files.length === 0) return null;
+  return { files, folderName: handle.name };
+}
+
+/** 保存済みフォルダを読み込む（起動時は requestPermission: false 推奨） */
+export async function restoreLastCustomMusicFolder(
+  options?: { requestPermission?: boolean },
+): Promise<CustomAudioFolderPick | null> {
+  if (!supportsCustomMusicFolderPicker()) return null;
+
+  const handle = await loadLastCustomMusicFolderHandle({ requirePermission: false });
+  if (!handle) return null;
+
+  const permOpts: FileSystemHandlePermissionDescriptor = { mode: 'read' };
+  let perm = await handle.queryPermission(permOpts);
+  if (perm !== 'granted') {
+    if (!options?.requestPermission) return null;
+    perm = await handle.requestPermission(permOpts);
+    if (perm !== 'granted') return null;
+  }
+
+  try {
+    return await readAudioFilesFromFolderHandle(handle);
+  } catch {
+    return null;
+  }
+}
+
 export async function pickCustomAudioFolder(): Promise<CustomAudioFolderPick | null> {
   if (!supportsCustomMusicFolderPicker()) return null;
 
@@ -90,16 +126,13 @@ export async function pickCustomAudioFolder(): Promise<CustomAudioFolderPick | n
     throw err;
   }
 
-  const files = await collectAudioFilesFromDirectory(handle);
+  const pick = await readAudioFilesFromFolderHandle(handle);
   void saveLastCustomMusicFolderHandle(handle);
-  if (files.length === 0) {
+  if (!pick) {
     throw new CustomFolderEmptyError(handle.name);
   }
 
-  return {
-    files: files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })),
-    folderName: handle.name,
-  };
+  return pick;
 }
 
 export function filterAudioFiles(files: File[]): File[] {

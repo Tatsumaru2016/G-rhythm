@@ -496,7 +496,7 @@ export class Renderer {
     ctx.restore();
   }
 
-  /** 左右マージン演出の直後・レーンより手前にダンサーを合成（ステージ右エリア） */
+  /** ステージ右の WebGL ダンサーを更新（#dancer-layer が game canvas より手前） */
   private compositeDancers(
     dt: number,
     laneBounds: LaneBounds,
@@ -514,37 +514,6 @@ export class Renderer {
       this.width,
       this.height,
     );
-
-    const dancerCanvas = this.stageDancers.getCanvas();
-    if (dancerCanvas.width <= 0 || dancerCanvas.height <= 0) return;
-
-    const laneEnd = laneBounds.startX + laneBounds.width;
-    const stageX = laneEnd;
-    const stageW = this.width - laneEnd;
-
-    const ctx = this.ctx;
-    const blit = () => ctx.drawImage(dancerCanvas, 0, 0, this.width, this.height);
-
-    ctx.save();
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.globalAlpha = 1;
-
-    if (this.dancerPreviewActive) {
-      blit();
-      ctx.restore();
-      return;
-    }
-
-    if (stageW > 12) {
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(stageX, 0, stageW, this.height);
-      ctx.clip();
-      blit();
-      ctx.restore();
-    }
-
-    ctx.restore();
   }
 
   private renderCleared(): void {

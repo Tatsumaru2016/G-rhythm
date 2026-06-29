@@ -12,6 +12,7 @@ import {
   folderNameFromFiles,
   pickCustomAudioFile,
   pickCustomAudioFolder,
+  restoreLastCustomMusicFolder,
   supportsCustomMusicFilePicker,
   supportsCustomMusicFolderPicker,
 } from '../audio/pickCustomAudio';
@@ -21,6 +22,7 @@ import {
   MIN_SCROLL_SPEED, MAX_SCROLL_SPEED,
 } from '../settings/scrollSpeed';
 import { DEFAULT_REDUCED_FLASH, loadReducedFlash, saveReducedFlash } from '../settings/reducedFlash';
+import { loadTitleSound, saveTitleSound } from '../settings/titleSound';
 import {
   DEFAULT_STAGE_FX_PATTERN,
   loadStageFxPattern,
@@ -98,6 +100,7 @@ export class UIManager {
   private nativeFolderPickActive = false;
   private scrollSpeed = loadScrollSpeed();
   private reducedFlash = DEFAULT_REDUCED_FLASH;
+  private titleSoundEnabled = loadTitleSound();
   private stageFxPattern = DEFAULT_STAGE_FX_PATTERN;
   private titleKeyHandler: ((e: KeyboardEvent) => void) | null = null;
   private titlePointerHandler: ((e: PointerEvent) => void) | null = null;
@@ -151,6 +154,7 @@ export class UIManager {
     this.customLoader = customLoader;
     this.audio = audio;
     this.reducedFlash = loadReducedFlash();
+    this.titleSoundEnabled = loadTitleSound();
     this.stageFxPattern = loadStageFxPattern();
     this.applyReducedFlashClass();
 
@@ -276,6 +280,19 @@ export class UIManager {
     `;
   }
 
+  private titleSoundToggleHtml(): string {
+    const on = this.titleSoundEnabled;
+    return `
+      <button type="button"
+        class="title-sound-toggle${on ? ' is-preview-playing' : ' is-preview-paused'}"
+        id="title-sound-toggle"
+        aria-pressed="${on}"
+        aria-label="${t('ui.titleSoundToggle')}">
+        ${this.songPreviewStateHtml(undefined, 'ui.titleSoundToggle')}
+      </button>
+    `;
+  }
+
   private titleFlashPanelHtml(): string {
     return `
       <div class="${this.panelClass('flash-corner-panel title-flash-panel')}">
@@ -306,6 +323,36 @@ export class UIManager {
     `;
   }
 
+  private syncTitleSoundToggleState(btn: HTMLElement | null): void {
+    if (!btn) return;
+    btn.classList.toggle('is-preview-playing', this.titleSoundEnabled);
+    btn.classList.toggle('is-preview-paused', !this.titleSoundEnabled);
+    btn.setAttribute('aria-pressed', String(this.titleSoundEnabled));
+  }
+
+  private bindTitleSoundToggle(): void {
+    const btn = this.overlay.querySelector('#title-sound-toggle') as HTMLButtonElement;
+    this.syncTitleSoundToggleState(btn);
+    btn?.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.titleSoundEnabled = !this.titleSoundEnabled;
+      saveTitleSound(this.titleSoundEnabled);
+      this.syncTitleSoundToggleState(btn);
+      this.playUiSelect();
+      void this.syncTitleBgm();
+    });
+  }
+
+  async syncTitleBgm(): Promise<void> {
+    await this.audio.resume();
+    if (this.titleSoundEnabled) {
+      await this.audio.playTitleBgm();
+    } else {
+      this.audio.stopTitleBgm();
+    }
+  }
+
   private flashToggleHtml(): string {
     return `
       <label class="setting-toggle">
@@ -321,6 +368,7 @@ export class UIManager {
 
   private bindSettingsControls(): void {
     this.bindLanguageControl();
+    this.bindTitleSoundToggle();
 
     const toggle = this.overlay.querySelector('#reduced-flash-toggle') as HTMLInputElement;
     toggle?.addEventListener('change', () => {
@@ -387,7 +435,7 @@ export class UIManager {
     this.titlePointerHandler = (e: PointerEvent) => {
       const target = e.target as HTMLElement;
       if (!target.closest('#title-screen')) return;
-      if (target.closest('.title-settings-panel, .title-dancer-preview-link')) return;
+      if (target.closest('.title-settings-panel, .title-dancer-preview-link, .title-sound-toggle')) return;
       navigate();
     };
     this.overlay.addEventListener('pointerdown', this.titlePointerHandler);
@@ -396,7 +444,7 @@ export class UIManager {
       if (e.repeat) return;
       if (!this.overlay.querySelector('#title-screen')) return;
       const target = e.target as HTMLElement;
-      if (target.closest('.title-settings-panel input, .title-settings-panel select, .title-settings-panel textarea')) {
+      if (target.closest('.title-settings-panel input, .title-settings-panel select, .title-settings-panel textarea, .title-settings-panel button, .title-sound-toggle')) {
         return;
       }
       navigate();
@@ -406,6 +454,9 @@ export class UIManager {
 
   showTitle() {
     this.screenId = 'title';
+    this.unbindSelectHubStart();
+    this.unbindCustomRingNavigation();
+    this.audio.stop();
     const titleImage = `${import.meta.env.BASE_URL}images/title.png`;
     const dancerLink = ENABLE_DANCER_DEBUG
       ? `<a href="#" class="title-dancer-preview-link" id="btn-dancer-preview">${t('debug.dancerPreviewLink')}</a>`
@@ -413,6 +464,7 @@ export class UIManager {
     this.render(`
       <div class="screen title-screen" id="title-screen">
         <img class="title-hero" src="${titleImage}" alt="G.RHYTHM" />
+        ${this.titleSoundToggleHtml()}
         ${this.titleSettingsPanelsHtml()}
         ${dancerLink}
         <p class="title-press-start" role="status">${t('ui.pressAnyKey')}</p>
@@ -429,6 +481,7 @@ export class UIManager {
     this.bindTitleNavigation(() => this.showSelect());
     this.stopSelectHubBackground();
     this.hidePlayHud();
+    void this.syncTitleBgm();
   }
 
   private dancerModelOptionsHtml(selected: DancerModelId): string {
@@ -443,6 +496,7 @@ export class UIManager {
 
   showDancerPreview() {
     this.screenId = 'dancerPreview';
+    this.audio.stopTitleBgm();
     this.hidePlayHud();
     this.unbindTitleNavigation();
     this.overlay.classList.remove('hidden');
@@ -531,21 +585,43 @@ export class UIManager {
     `;
   }
 
+  private hasCustomMusicLoaded(): boolean {
+    if (this.customLoader.isFolderMode()) {
+      return this.customLoader.getCatalog().length > 0;
+    }
+    return this.customLoader.getBuffer() !== null;
+  }
+
   private selectHubCustomPanelHtml(): string {
     const selected = this.selectHubBuiltinIndex === null;
+    const importPrompt = !this.hasCustomMusicLoaded();
     return `
       <div
-        class="select-hub-custom-panel${selected ? ' is-selected' : ''}"
+        class="select-hub-custom-panel${selected ? ' is-selected' : ''}${importPrompt ? ' is-import-prompt' : ''}"
         id="select-hub-custom-panel"
       >
         <span class="select-hub-builtin-diff custom">${t('ui.custom')}</span>
         <span class="select-hub-custom-title">${t('ui.yourMusic')}</span>
         <div class="select-hub-custom-imports">
-          <button type="button" class="select-hub-import-btn" id="btn-hub-import-folder" aria-label="${t('ui.customImportFolder')}">
-            <svg class="select-hub-import-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
+          <button
+            type="button"
+            class="select-hub-import-btn select-hub-import-btn--folder"
+            id="btn-hub-import-folder"
+            title="${t('ui.customImportFolder')}"
+            aria-label="${t('ui.customImportFolder')}"
+          >
+            <svg class="select-hub-import-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
+            <span class="select-hub-import-label">${t('ui.customImportFolder')}</span>
           </button>
-          <button type="button" class="select-hub-import-btn" id="btn-hub-import-file" aria-label="${t('ui.customImportSingle')}">
-            <svg class="select-hub-import-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+          <button
+            type="button"
+            class="select-hub-import-btn select-hub-import-btn--file"
+            id="btn-hub-import-file"
+            title="${t('ui.customImportSingle')}"
+            aria-label="${t('ui.customImportSingle')}"
+          >
+            <svg class="select-hub-import-icon" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+            <span class="select-hub-import-label">${t('ui.customImportSingle')}</span>
           </button>
         </div>
       </div>
@@ -603,13 +679,28 @@ export class UIManager {
     return `
       <div class="difficulty-picker difficulty-picker--compact">
         <p class="difficulty-picker-label" id="difficulty-label">
-          ${withTooltip(t('ui.difficulty'), tDifficultyHint(this.customDifficulty), 'has-tooltip--above')}
+          ${withTooltip(
+            `${t('ui.difficulty')}: <span class="difficulty-picker-current">${this.customDifficulty}</span>`,
+            tDifficultyHint(this.customDifficulty),
+            'has-tooltip--above',
+          )}
         </p>
         <div class="difficulty-options" role="radiogroup" aria-label="${t('ui.difficulty')}">
           ${this.customDifficultyOptionsHtml()}
         </div>
       </div>
     `;
+  }
+
+  private syncDifficultyPickerUi(): void {
+    this.overlay.querySelectorAll('.difficulty-option').forEach((el) => {
+      const active = (el as HTMLElement).dataset.diff === this.customDifficulty;
+      el.classList.toggle('selected', active);
+      el.setAttribute('aria-pressed', String(active));
+    });
+    const currentEl = this.overlay.querySelector('.difficulty-picker-current');
+    if (currentEl) currentEl.textContent = this.customDifficulty;
+    updateTooltip(this.overlay, '#difficulty-label .has-tooltip', tDifficultyHint(this.customDifficulty));
   }
 
   private customBpmOffsetRowHtml(): string {
@@ -644,10 +735,10 @@ export class UIManager {
     `;
   }
 
-  private songPreviewStateHtml(id?: string): string {
+  private songPreviewStateHtml(id?: string, titleKey: MessageKey = 'ui.previewToggle'): string {
     const idAttr = id ? ` id="${id}"` : '';
     return `
-      <span class="song-preview-state"${idAttr} title="${t('ui.previewToggle')}">
+      <span class="song-preview-state"${idAttr} title="${t(titleKey)}">
         <span class="song-preview-icon song-preview-icon--on">
           <span class="song-preview-note" aria-hidden="true">\u266a</span>
           <span class="song-preview-label">ON</span>
@@ -688,12 +779,31 @@ export class UIManager {
     return this.customLoader.isFolderMode() && this.customLoader.getCatalog().length > 1;
   }
 
-  showSelect() {
+  async tryRestoreLastCustomFolder(requestPermission = false): Promise<boolean> {
+    if (this.customLoader.isFolderMode() && this.customLoader.getCatalog().length > 0) {
+      return true;
+    }
+
+    try {
+      const pick = await restoreLastCustomMusicFolder({ requestPermission });
+      if (!pick) return false;
+      this.applyCustomFolder(pick.files, pick.folderName, { navigate: false });
+      return true;
+    } catch (err) {
+      console.warn('Failed to restore custom music folder', err);
+      return false;
+    }
+  }
+
+  async showSelect() {
+    await this.tryRestoreLastCustomFolder(true);
+
     this.screenId = 'select';
     this.unbindTitleNavigation();
     this.unbindCustomRingNavigation();
     this.unbindSelectHubStart();
     this.stopSelectHubBackground();
+    this.audio.stopTitleBgm();
     this.audio.stopPreviewPlayback();
 
     const selectImage = `${import.meta.env.BASE_URL}images/select.png`;
@@ -851,7 +961,15 @@ export class UIManager {
     });
   }
 
+  private canBuildCustomChart(): boolean {
+    return this.customLoader.getBuffer() !== null;
+  }
+
   private bindSelectHubDifficultyDock(): void {
+    const dock = this.overlay.querySelector('#select-hub-tuning-panel');
+    if (!dock || dock.dataset.dockBound === '1') return;
+    dock.dataset.dockBound = '1';
+
     const updateChart = () => {
       if (this.selectHubBuiltinIndex !== null) {
         const chart = CHARTS[this.selectHubBuiltinIndex];
@@ -859,11 +977,16 @@ export class UIManager {
         this.updateSelectHubCenterFromChart(chart, chart.title, chart.audioDuration ?? 0);
         return;
       }
-      const c = this.customLoader.buildChart(this.customBpm, this.customOffset, this.customDifficulty);
-      this.selectedChart = c;
-      const entry = this.customLoader.getCatalog()[this.customLoader.getSelectedIndex()];
-      this.updateSelectHubCenterFromChart(c, entry?.title ?? c.title, c.audioDuration ?? 0);
-      updateTooltip(this.overlay, '#difficulty-label .has-tooltip', tDifficultyHint(this.customDifficulty));
+      if (!this.canBuildCustomChart()) return;
+      try {
+        const c = this.customLoader.buildChart(this.customBpm, this.customOffset, this.customDifficulty);
+        this.selectedChart = c;
+        const entry = this.customLoader.getCatalog()[this.customLoader.getSelectedIndex()];
+        this.updateSelectHubCenterFromChart(c, entry?.title ?? c.title, c.audioDuration ?? 0);
+        updateTooltip(this.overlay, '#difficulty-label .has-tooltip', tDifficultyHint(this.customDifficulty));
+      } catch (err) {
+        console.error(err);
+      }
     };
 
     const bpmSlider = this.overlay.querySelector('#bpm-slider') as HTMLInputElement;
@@ -889,15 +1012,12 @@ export class UIManager {
         if (!diff || diff === this.customDifficulty) return;
         this.playUiSelect();
         this.customDifficulty = diff;
-        this.overlay.querySelectorAll('.difficulty-option').forEach((el) => {
-          const active = (el as HTMLElement).dataset.diff === diff;
-          el.classList.toggle('selected', active);
-          el.setAttribute('aria-pressed', String(active));
-        });
+        this.syncDifficultyPickerUi();
         updateChart();
       });
     });
 
+    this.syncDifficultyPickerUi();
     this.bindScrollSpeedControl();
     updateChart();
   }
@@ -1026,6 +1146,10 @@ export class UIManager {
 
     const catalog = this.customLoader.getCatalog();
     if (this.customLoader.isFolderMode() && catalog.length > 0) {
+      if (!this.canBuildCustomChart()) {
+        void this.loadSelectHubTrack(this.customLoader.getSelectedIndex());
+        return;
+      }
       const chart = this.customLoader.buildChart(this.customBpm, this.customOffset, this.customDifficulty);
       this.selectedChart = chart;
       const entry = catalog[this.customLoader.getSelectedIndex()];
@@ -1083,7 +1207,7 @@ export class UIManager {
     const counterEl = this.overlay.querySelector('#ring-track-counter');
 
     this.setRingCenterTitle(t('ui.yourMusic'));
-    if (metaEl) metaEl.textContent = t('ui.customImportHint');
+    if (metaEl) metaEl.textContent = '';
     if (statsEl) statsEl.textContent = '\u2014';
     if (counterEl) counterEl.textContent = '';
     this.updateSelectHubChartAnalysis(null);
@@ -1140,6 +1264,7 @@ export class UIManager {
     });
     const customPanel = this.overlay.querySelector('#select-hub-custom-panel');
     customPanel?.classList.toggle('is-selected', this.selectHubBuiltinIndex === null);
+    customPanel?.classList.toggle('is-import-prompt', !this.hasCustomMusicLoaded());
   }
 
   private syncSelectHubBuiltinModeClass(): void {
@@ -1251,6 +1376,7 @@ export class UIManager {
   private async loadSelectHubTrack(index: number, options?: { silent?: boolean }): Promise<void> {
     const silent = options?.silent ?? this.customLoader.getCatalog().length <= 1;
     const gen = ++this.selectHubTrackLoadGen;
+    this.audio.stopPreviewPlayback();
     this.selectHubTrackIndex = index;
     this.selectHubBuiltinIndex = null;
     this.customLoader.setSelectedIndex(index);
@@ -1320,6 +1446,12 @@ export class UIManager {
     isLoading: () => boolean,
   ): void {
     if (!trigger) return;
+    const el = trigger as HTMLElement;
+    if (el.dataset.previewBound === '1') {
+      this.syncPreviewToggleState(trigger, isLoading());
+      return;
+    }
+    el.dataset.previewBound = '1';
     const toggle = async () => {
       if (isLoading()) return;
       await this.audio.toggleUserPreview();
@@ -1441,7 +1573,11 @@ export class UIManager {
     }
   }
 
-  private applyCustomFolder(files: File[], folderName = '') {
+  private applyCustomFolder(
+    files: File[],
+    folderName = '',
+    options?: { navigate?: boolean },
+  ) {
     const audioFiles = filterAudioFiles(files);
     if (audioFiles.length === 0) {
       this.showImportError(t('ui.customFolderEmpty'));
@@ -1455,8 +1591,10 @@ export class UIManager {
     this.customDifficulty = 'NORMAL';
     this.selectHubBuiltinIndex = null;
     this.selectHubTrackIndex = 0;
-    this.playUiSelect();
-    this.showSelect();
+    if (options?.navigate !== false) {
+      this.playUiSelect();
+      void this.showSelect();
+    }
   }
 
   private showImportError(message: string): void {

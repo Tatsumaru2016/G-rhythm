@@ -45,6 +45,9 @@ export class AudioEngine {
   private previewStartedAt = 0;
   private previewPaused = false;
   private previewEnabled = true;
+  private titleBgmBuffer: AudioBuffer | null = null;
+  private titleBgmSource: AudioBufferSourceNode | null = null;
+  private titleBgmGain: GainNode | null = null;
 
   async decodeArrayBuffer(arrayBuffer: ArrayBuffer): Promise<AudioBuffer> {
     await this.init();
@@ -74,6 +77,40 @@ export class AudioEngine {
       throw new Error(`[AudioEngine] failed to load track: ${url}`);
     }
     return this.decodeArrayBuffer(await response.arrayBuffer());
+  }
+
+  async loadTitleBgm(url: string): Promise<void> {
+    this.titleBgmBuffer = await this.loadTrackFromUrl(url);
+  }
+
+  isTitleBgmPlaying(): boolean {
+    return this.titleBgmSource !== null;
+  }
+
+  async playTitleBgm(): Promise<void> {
+    if (!this.titleBgmBuffer) return;
+    await this.resume();
+    if (!this.ctx || !this.masterGain) return;
+    this.stopTitleBgm();
+
+    if (!this.titleBgmGain) {
+      this.titleBgmGain = this.ctx.createGain();
+      this.titleBgmGain.gain.value = 0.55;
+      this.titleBgmGain.connect(this.masterGain);
+    }
+
+    const source = this.ctx.createBufferSource();
+    source.buffer = this.titleBgmBuffer;
+    source.loop = true;
+    source.connect(this.titleBgmGain);
+    source.start(0);
+    this.titleBgmSource = source;
+  }
+
+  stopTitleBgm(): void {
+    if (!this.titleBgmSource) return;
+    try { this.titleBgmSource.stop(); } catch { /* already stopped */ }
+    this.titleBgmSource = null;
   }
 
   hasUserBuffer(): boolean {
@@ -398,6 +435,7 @@ export class AudioEngine {
   }
 
   stop(): void {
+    this.stopTitleBgm();
     this.stopUserPreview();
     for (const node of this.scheduledNodes) {
       try { node.stop(); } catch { /* already stopped */ }

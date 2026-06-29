@@ -6,7 +6,7 @@ export default defineConfig({
     port: 5173,
     open: true,
     watch: {
-      ignored: ['**/*.crdownload', '**/.crdownload'],
+      ignored: ['**/*.crdownload', '**/.crdownload', '**/public/audio/**'],
     },
   },
 });

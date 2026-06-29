@@ -81,9 +81,17 @@ async function main() {
     },
   });
 
-  ui.showLoading('ui.loadingModels');
-  await builtinAudio.preloadAll(audio);
   ui.showTitle();
+  void ui.tryRestoreLastCustomFolder();
+  void (async () => {
+    try {
+      await builtinAudio.preloadAll(audio);
+      await audio.loadTitleBgm(`${import.meta.env.BASE_URL}audio/title_bgm.ogg`);
+      await ui.syncTitleBgm();
+    } catch (err) {
+      console.error(err);
+    }
+  })();
   void game.preloadDancerModels((loaded, total) => {
     ui.updateBackgroundLoadProgress(loaded, total);
   });
