@@ -155,8 +155,16 @@ export class StageDancers {
     }
   }
 
+  private modelUrl(id: DancerModelId): string {
+    const file = MODEL_FILES[id];
+    if (import.meta.env.DEV) {
+      return `${import.meta.env.BASE_URL}models/${file}`;
+    }
+    return `https://raw.githubusercontent.com/Tatsumaru2016/G-rhythm/main/public/models/${file}`;
+  }
+
   private loadTemplate(id: DancerModelId): Promise<void> {
-    const url = `${import.meta.env.BASE_URL}models/${MODEL_FILES[id]}`;
+    const url = this.modelUrl(id);
     return new Promise((resolve) => {
       this.loader.load(
         url,
