@@ -57,6 +57,9 @@ npm run preview
 GitHub Pages で自動デプロイされます。
 
 - 本番: https://tatsumaru2016.github.io/G-rhythm/
+- リポジトリ: https://github.com/Tatsumaru2016/G-rhythm
+
+ダンサーモデル（約1.3GB）は GitHub リポジトリ上にバックアップされ、本番サイトでは `raw.githubusercontent.com` から読み込みます（初回の「ダンス会場設営中」に時間がかかります）。
 
 ## 技術スタック
 
