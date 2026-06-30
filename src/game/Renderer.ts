@@ -13,7 +13,7 @@ import {
 } from './dancerCatalog';
 import type { AudioReactive } from '../audio/AudioEngine';
 import { DEFAULT_SCROLL_SPEED } from '../settings/scrollSpeed';
-import { getPhaseLabel, getPhaseScrollMultiplier, getSongPhase, type SongPhase } from './scrollPhase';
+import { getPhaseLabel, getPhaseScrollMultiplier, getSongPhase, PHASE_BACKGROUND_THEMES, type SongPhase } from './scrollPhase';
 import { getGenreLabel, resolveGenre } from '../audio/musicGenre';
 import {
   getMilestoneSublabel,
@@ -68,6 +68,8 @@ export class Renderer {
     age: number;
   } | null = null;
   private bgStars: { x: number; y: number; z: number; brightness: number }[] = [];
+  private lastBackgroundPhase: SongPhase = 'early';
+  private phaseTransition = 0;
   private time = 0;
   private lastDt = 0;
   private sideFX = new SideStageFX();
@@ -217,6 +219,10 @@ export class Renderer {
     return this.stageDancers.preloadEarlyPhase();
   }
 
+  preloadRemainingDancerModels(onProgress?: (loaded: number, total: number) => void): Promise<void> {
+    return this.stageDancers.preloadRemaining(onProgress);
+  }
+
   startDancerPreview(leftId: DancerModelId, rightId: DancerModelId): void {
     if (this.dancerPreviewActive) {
       this.stageDancers.setPreviewPair(leftId, rightId);
@@ -233,6 +239,7 @@ export class Renderer {
       this.time += dt;
       this.renderCleared();
       const bounds = this.laneBounds();
+      this.drawStageDancerSlot(bounds);
       this.compositeDancers(dt, bounds, 0, 0);
       this.previewRafId = requestAnimationFrame(loop);
     };
@@ -260,6 +267,8 @@ export class Renderer {
   resetSideEffects(chart: ChartData): void {
     this.playfieldActive = true;
     this.sideFX.reset(chart);
+    this.lastBackgroundPhase = 'early';
+    this.phaseTransition = 0;
     this.stageDancers.show();
     const bounds = this.laneBounds();
     this.stageDancers.resize(this.width, this.height, bounds);
@@ -453,6 +462,12 @@ export class Renderer {
     const pulse = (this.screen.perfectPulse + (stats.combo > 0 ? Math.min(0.4, stats.combo * 0.004) : 0)) * pulseScale;
     const laneBounds = this.laneBounds();
     const songPhase = getSongPhase(currentTime, this.songDuration);
+    if (songPhase !== this.lastBackgroundPhase) {
+      this.phaseTransition = 1;
+      this.lastBackgroundPhase = songPhase;
+    }
+    this.phaseTransition = Math.max(0, this.phaseTransition - this.lastDt * 1.1);
+
     const preSync = SideStageFX.buildSync(
       currentTime, chart, stats, pulse, audioReactive,
       this.sideFX.getHitBoost(),
@@ -467,7 +482,7 @@ export class Renderer {
       this.sideFX.getHue(),
     );
 
-    this.drawBackground(!this.reducedFlash);
+    this.drawBackground(!this.reducedFlash, songPhase);
 
     ctx.save();
     ctx.globalCompositeOperation = 'screen';
@@ -476,6 +491,8 @@ export class Renderer {
     ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = 1;
     ctx.restore();
+
+    this.drawStageDancerSlot(laneBounds);
 
     this.compositeDancers(this.lastDt, laneBounds, currentTime, this.sideFX.getPerfectBoost());
 
@@ -516,6 +533,57 @@ export class Renderer {
     );
   }
 
+  /** ダンサー背面の派手なFXを抑え、シルエットの視認性を上げる */
+  private drawStageDancerSlot(bounds: LaneBounds): void {
+    if (!this.playfieldActive && !this.dancerPreviewActive) return;
+
+    const ctx = this.ctx;
+    const availH = Math.max(100, bounds.hitLineY - bounds.topY);
+    const strength = this.reducedFlash ? 0.28 : 0.52;
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
+
+    if (this.dancerPreviewActive) {
+      const cy = bounds.topY + availH * 0.5;
+      for (const cx of [this.width * 0.26, this.width * 0.74]) {
+        const rx = this.width * 0.14;
+        const ry = availH * 0.4;
+        const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(rx, ry));
+        grad.addColorStop(0, `rgba(0, 0, 0, ${strength})`);
+        grad.addColorStop(0.55, `rgba(0, 0, 0, ${strength * 0.62})`);
+        grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+      return;
+    }
+
+    const laneEnd = bounds.startX + bounds.width;
+    const stageW = this.width - laneEnd;
+    if (stageW < 80) {
+      ctx.restore();
+      return;
+    }
+
+    const cx = laneEnd + stageW * 0.5;
+    const cy = bounds.topY + availH * 0.5 + 40;
+    const rx = stageW * 0.44;
+    const ry = availH * 0.4;
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(rx, ry));
+    grad.addColorStop(0, `rgba(0, 0, 0, ${strength})`);
+    grad.addColorStop(0.5, `rgba(0, 0, 0, ${strength * 0.65})`);
+    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
   private renderCleared(): void {
     const ctx = this.ctx;
     ctx.save();
@@ -523,15 +591,38 @@ export class Renderer {
     ctx.restore();
   }
 
-  private drawBackground(animated = true) {
+  private drawBackground(animated = true, phase: SongPhase = 'early') {
     const ctx = this.ctx;
+    const theme = PHASE_BACKGROUND_THEMES[phase];
     const grad = ctx.createLinearGradient(0, 0, 0, this.height);
-    grad.addColorStop(0, '#050010');
-    grad.addColorStop(0.35, '#0a0018');
-    grad.addColorStop(1, '#1a0035');
+    grad.addColorStop(0, theme.top);
+    grad.addColorStop(0.38, theme.mid);
+    grad.addColorStop(1, theme.bottom);
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, this.width, this.height);
 
+    const nebula = ctx.createRadialGradient(
+      this.width * 0.62, this.height * 0.42, 0,
+      this.width * 0.62, this.height * 0.42, this.width * 0.72,
+    );
+    nebula.addColorStop(0, theme.nebulaCenter);
+    nebula.addColorStop(0.45, theme.nebulaMid);
+    nebula.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = nebula;
+    ctx.fillRect(0, 0, this.width, this.height);
+
+    const laneNebula = ctx.createRadialGradient(
+      this.width * 0.18, this.height * 0.55, 0,
+      this.width * 0.18, this.height * 0.55, this.width * 0.38,
+    );
+    laneNebula.addColorStop(0, theme.nebulaMid);
+    laneNebula.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.globalAlpha = 0.65;
+    ctx.fillStyle = laneNebula;
+    ctx.fillRect(0, 0, this.width, this.height);
+    ctx.globalAlpha = 1;
+
+    const [sr, sg, sb] = theme.starRgb;
     for (const star of this.bgStars) {
       const x = star.x * this.width;
       const y = animated
@@ -542,10 +633,23 @@ export class Renderer {
         : 0.65;
       const size = star.z * 2;
       ctx.globalAlpha = star.brightness * twinkle;
-      ctx.fillStyle = '#ffffff';
+      ctx.fillStyle = `rgb(${sr}, ${sg}, ${sb})`;
       ctx.fillRect(x, y, size, size);
     }
     ctx.globalAlpha = 1;
+
+    if (this.phaseTransition > 0.02 && !this.reducedFlash) {
+      const [fr, fg, fb] = theme.flashRgb;
+      const flash = this.phaseTransition * 0.32;
+      const flashGrad = ctx.createRadialGradient(
+        this.width * 0.5, this.height * 0.45, 0,
+        this.width * 0.5, this.height * 0.45, this.width * 0.65,
+      );
+      flashGrad.addColorStop(0, `rgba(${fr}, ${fg}, ${fb}, ${flash})`);
+      flashGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = flashGrad;
+      ctx.fillRect(0, 0, this.width, this.height);
+    }
   }
 
   private drawLanes() {

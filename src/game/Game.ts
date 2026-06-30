@@ -1,5 +1,5 @@
 import type { ChartData, ActiveNote, GameStats, JudgmentType, LaneIndex } from '../types';
-import { BASE_SCORE } from '../types';
+import { ddrJudgmentPoints, countMaxScoreSteps, ddrRawToMillion, computeDdrMillionScore } from '../scoring/ddrScoring';
 import {
   parseChart,
   getSongDuration,
@@ -46,6 +46,8 @@ export class Game {
   private countdownTimer = 0;
   private songDuration = 0;
   private comboMultiplier = 1;
+  private ddrMaxSteps = 0;
+  private ddrRawPoints = 0;
   private accuracyMilestonesReached = new Set<AccuracyTier>();
   private rafId = 0;
   private lastFrameTime = 0;
@@ -78,6 +80,10 @@ export class Game {
     return this.renderer.preloadEarlyDancers();
   }
 
+  preloadRemainingDancerModels(onProgress?: (loaded: number, total: number) => void): Promise<void> {
+    return this.renderer.preloadRemainingDancerModels(onProgress);
+  }
+
   bindTouchZones(zones: HTMLElement[]) {
     this.input.bindTouchZones(zones);
   }
@@ -86,24 +92,42 @@ export class Game {
     return this.renderer.getTouchZoneLayout();
   }
 
-  start(chart: ChartData) {
+  start(chart: ChartData, options?: { countdownSeconds?: number }) {
     cancelAnimationFrame(this.rafId);
     const playChart = withLeadInPad(normalizeChartForPlay(chart), this.renderer.getApproachTime());
     this.chart = playChart;
     this.notes = parseChart(playChart);
     this.stats = this.emptyStats();
+    this.ddrMaxSteps = countMaxScoreSteps(playChart);
+    this.ddrRawPoints = 0;
     this.songDuration = getSongDuration(playChart);
     this.comboMultiplier = 1;
     this.accuracyMilestonesReached.clear();
-    this.phase = 'countdown';
-    this.countdownValue = 3;
-    this.countdownTimer = 0;
+
+    const countdownSeconds = options?.countdownSeconds ?? 3;
     this.running = true;
     this.lastFrameTime = performance.now();
     this.renderer.resetSideEffects(playChart);
     this.renderer.setSongDuration(this.songDuration);
     this.renderer.setDancerRotationDuration(getDancerRotationDuration(playChart));
-    void this.audio.resume().then(() => this.audio.playCountdownTick(3));
+
+    if (countdownSeconds <= 0) {
+      this.phase = 'playing';
+      this.countdownValue = 0;
+      this.countdownTimer = 0;
+      void this.audio.resume().then(() => {
+        this.audio.playGameStartSound();
+        if (this.chart) this.audio.play(this.chart);
+      });
+      this.callbacks.onPlayStart();
+      this.loop();
+      return;
+    }
+
+    this.phase = 'countdown';
+    this.countdownValue = countdownSeconds;
+    this.countdownTimer = 0;
+    void this.audio.resume().then(() => this.audio.playCountdownTick(countdownSeconds));
     this.loop();
   }
 
@@ -173,7 +197,7 @@ export class Game {
           if (this.countdownValue > 0) {
             this.audio.playCountdownTick(this.countdownValue);
           } else {
-            this.audio.playCountdownStart();
+            this.audio.playGameStartSound();
             this.phase = 'playing';
             if (this.chart) this.audio.play(this.chart);
             this.callbacks.onPlayStart();
@@ -218,10 +242,16 @@ export class Game {
     this.phase = 'finished';
     this.running = false;
     cancelAnimationFrame(this.rafId);
+    void this.audio.ensureSongFinishCheerLoaded().then(() => {
+      this.audio.playSongFinishCheer();
+    });
     this.audio.stop();
     this.particles.clear();
     this.renderer.onGameEnd();
-    if (this.chart) this.callbacks.onFinish(this.stats, this.chart);
+    if (this.chart) {
+      this.stats.score = computeDdrMillionScore(this.stats, this.chart);
+      this.callbacks.onFinish(this.stats, this.chart);
+    }
   }
 
   private onLanePress(lane: LaneIndex) {
@@ -276,12 +306,17 @@ export class Game {
       this.comboMultiplier = 1;
     }
 
-    const points = Math.floor(BASE_SCORE * config.scoreRatio * this.comboMultiplier);
-    this.stats.score += points;
+    const points = ddrJudgmentPoints(judgment);
+    this.ddrRawPoints += points;
+    this.stats.score = ddrRawToMillion(this.ddrRawPoints, this.ddrMaxSteps);
 
     if (!isRelease) {
       this.audio.playHitSound(lane, judgment, getAccuracyRatio(this.stats));
-      this.audio.playJudgmentVoice(judgment);
+      if (judgment === 'perfect' || judgment === 'great') {
+        this.audio.playRandomGameplayCheer();
+      } else {
+        this.audio.playJudgmentVoice(judgment);
+      }
       this.renderer.triggerLaneGlow(lane, judgment);
       this.renderer.triggerScreenEffect(judgment);
       this.renderer.showJudgment(judgment);

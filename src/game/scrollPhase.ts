@@ -23,6 +23,81 @@ export const PHASE_COLOR_SCHEMES: Record<SongPhase, PhaseColorScheme> = {
   late: { hueBase: 35, hueSecondary: 355, hueAccent: 55, saturation: 95 },
 };
 
+/** プレイ背景のフェーズ別テーマ */
+export interface PhaseBackgroundTheme {
+  top: string;
+  mid: string;
+  bottom: string;
+  nebulaCenter: string;
+  nebulaMid: string;
+  starRgb: [number, number, number];
+  flashRgb: [number, number, number];
+}
+
+export const PHASE_BACKGROUND_THEMES: Record<SongPhase, PhaseBackgroundTheme> = {
+  early: {
+    top: '#030818',
+    mid: '#06102c',
+    bottom: '#0c1a42',
+    nebulaCenter: 'rgba(48, 140, 255, 0.2)',
+    nebulaMid: 'rgba(80, 60, 220, 0.1)',
+    starRgb: [190, 225, 255],
+    flashRgb: [80, 200, 255],
+  },
+  mid: {
+    top: '#080418',
+    mid: '#16082c',
+    bottom: '#240a38',
+    nebulaCenter: 'rgba(255, 50, 200, 0.22)',
+    nebulaMid: 'rgba(180, 40, 255, 0.12)',
+    starRgb: [255, 200, 245],
+    flashRgb: [255, 80, 220],
+  },
+  late: {
+    top: '#120408',
+    mid: '#1e0808',
+    bottom: '#2e0c04',
+    nebulaCenter: 'rgba(255, 130, 40, 0.24)',
+    nebulaMid: 'rgba(255, 60, 80, 0.14)',
+    starRgb: [255, 220, 175],
+    flashRgb: [255, 160, 40],
+  },
+};
+
+/** サイドFXのフェーズ別強度 */
+export const PHASE_SIDE_FX_DRIVE: Record<SongPhase, number> = {
+  early: 0.84,
+  mid: 1.0,
+  late: 1.2,
+};
+
+/** サイドFXパターンのフェーズ別重み（0=Rings … 9=CyberGrid） */
+export function getPhasePatternWeightBias(phase: SongPhase): readonly number[] {
+  const w = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
+  if (phase === 'early') {
+    w[0] = 1.9;
+    w[5] = 1.7;
+    w[3] = 1.5;
+    w[9] = 1.2;
+    w[7] = 0.55;
+    w[8] = 0.5;
+  } else if (phase === 'mid') {
+    w[1] = 1.8;
+    w[2] = 1.7;
+    w[3] = 1.6;
+    w[6] = 1.4;
+    w[0] = 0.85;
+  } else {
+    w[4] = 1.9;
+    w[6] = 1.75;
+    w[7] = 1.65;
+    w[8] = 1.85;
+    w[9] = 1.45;
+    w[5] = 0.7;
+  }
+  return w;
+}
+
 export function getPhaseColorScheme(phase: SongPhase): PhaseColorScheme {
   return PHASE_COLOR_SCHEMES[phase];
 }

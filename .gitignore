@@ -9,9 +9,21 @@ Thumbs.db
 .env.*
 !.env.example
 *.crdownload
+*.pdnSave
 .cursor/
 
+# モデル圧縮メタ（自動生成）
+public/models/.optimized-meta.json
+public/models/.compress-lock
+public/models/.compress-tmp/
+
+# Three.js デコーダ（postinstall で自動コピー）
+public/draco/
+public/basis/
+
 # 誤ってルートに置かれたアセット（正本は public/ 配下）
+/*.glb
+/*.wav
 /*.glb
 /*.png
 /*.jpg

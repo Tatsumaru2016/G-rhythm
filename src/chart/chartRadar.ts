@@ -69,10 +69,10 @@ export function chartRadarStars(chart: ChartData, maxStars = CHART_STAR_MAX): nu
   return scoreToChartStars(chartDifficultyScore(chart), maxStars);
 }
 
-/** chart.level 表示用（1〜15）。ランク・★と同じスコア体系 */
+/** chart.level 表示用（1〜20）。DDR の難易度レベル相当 */
 export function chartDisplayLevel(chart: ChartData): number {
   if (chart.notes.length === 0) return 1;
-  return Math.min(15, Math.max(1, Math.round((chartDifficultyScore(chart) / 100) * 15)));
+  return Math.min(20, Math.max(1, Math.round((chartDifficultyScore(chart) / 100) * 20)));
 }
 
 /** @deprecated chartRadarStars を使用 */

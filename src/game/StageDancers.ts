@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { createGltfLoader, disposeGltfLoaders } from './gltfLoaders';
 import type { LaneBounds } from './SideStageFX';
 import type { SongPhase, DancerSubPhase } from './scrollPhase';
 import { getDancerSubPhase } from './scrollPhase';
@@ -17,6 +18,7 @@ import {
 } from './dancerCatalog';
 import { dancerModelUrl } from './dancerModelUrl';
 import { readCachedModel, writeCachedModel } from './dancerModelCache';
+import { dancerPreloadConcurrency, IS_PROD_WEB } from '../perf/webPerf';
 
 export type { DancerModelId } from './dancerCatalog';
 
@@ -37,7 +39,7 @@ export class StageDancers {
   private renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
   private camera = new THREE.OrthographicCamera(0, 1, 1, 0, 0.1, 100);
-  private loader = new GLTFLoader();
+  private loader: GLTFLoader;
   private templates = new Map<DancerModelId, DancerTemplate>();
   private leftRoot = new THREE.Group();
   private rightRoot = new THREE.Group();
@@ -69,6 +71,7 @@ export class StageDancers {
   private screenW = 0;
   private screenH = 0;
   private layoutKey = '';
+  private stageBackdrops: THREE.Mesh[] = [];
 
   constructor(parent: HTMLElement) {
     this.layer = document.createElement('div');
@@ -84,22 +87,82 @@ export class StageDancers {
       canvas: this.canvas,
       alpha: true,
       premultipliedAlpha: false,
-      antialias: true,
+      antialias: !IS_PROD_WEB,
       powerPreference: 'high-performance',
     });
     this.renderer.setClearColor(0x000000, 0);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.loader = createGltfLoader(this.renderer);
 
     this.scene.add(this.leftRoot);
     this.scene.add(this.rightRoot);
 
-    const key = new THREE.DirectionalLight(0x88eeff, 2.8);
+    const key = new THREE.DirectionalLight(0xccffff, 3.4);
     key.position.set(2, 3, 5);
     this.scene.add(key);
-    const rim = new THREE.DirectionalLight(0xff70dd, 2.2);
+    const rim = new THREE.DirectionalLight(0xff88ee, 3.2);
     rim.position.set(-3, 2, -4);
     this.scene.add(rim);
-    this.scene.add(new THREE.AmbientLight(0x7090b0, 1.1));
+    const fill = new THREE.DirectionalLight(0x88aaff, 2.0);
+    fill.position.set(0, 1, 6);
+    this.scene.add(fill);
+    this.scene.add(new THREE.AmbientLight(0x90b8d8, 1.35));
+    this.ensureStageBackdrops(2);
+  }
+
+  private createStageBackdropTexture(): THREE.CanvasTexture {
+    const size = 256;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const g = canvas.getContext('2d')!;
+    const grad = g.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    grad.addColorStop(0, 'rgba(0, 0, 0, 0.78)');
+    grad.addColorStop(0.42, 'rgba(0, 0, 0, 0.52)');
+    grad.addColorStop(0.72, 'rgba(0, 0, 0, 0.22)');
+    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, size, size);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  }
+
+  private ensureStageBackdrops(count: number): void {
+    while (this.stageBackdrops.length < count) {
+      const tex = this.createStageBackdropTexture();
+      const mat = new THREE.MeshBasicMaterial({
+        map: tex,
+        transparent: true,
+        depthWrite: false,
+        depthTest: false,
+      });
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
+      mesh.renderOrder = -10;
+      this.scene.add(mesh);
+      this.stageBackdrops.push(mesh);
+    }
+    for (let i = 0; i < this.stageBackdrops.length; i++) {
+      this.stageBackdrops[i].visible = i < count;
+    }
+  }
+
+  private layoutStageBackdrop(
+    index: number,
+    centerX: number,
+    centerCanvasY: number,
+    width: number,
+    height: number,
+  ): void {
+    const mesh = this.stageBackdrops[index];
+    if (!mesh) return;
+    mesh.visible = true;
+    mesh.position.set(centerX, this.toWorldY(centerCanvasY), -2);
+    mesh.scale.set(Math.max(width, 80), Math.max(height, 120), 1);
+  }
+
+  private hideStageBackdrops(): void {
+    for (const mesh of this.stageBackdrops) mesh.visible = false;
   }
 
   private queueLoad(id: DancerModelId): void {
@@ -155,7 +218,14 @@ export class StageDancers {
 
   /** 全モデル（デバッグ向け・通常起動では使わない） */
   async preloadAll(onProgress?: (loaded: number, total: number) => void): Promise<void> {
-    await this.preloadIds(ALL_DANCER_MODEL_IDS, onProgress, 2);
+    await this.preloadIds(ALL_DANCER_MODEL_IDS, onProgress, dancerPreloadConcurrency());
+  }
+
+  /** 序盤以外をバックグラウンド向けに読み込み */
+  async preloadRemaining(onProgress?: (loaded: number, total: number) => void): Promise<void> {
+    const remaining = ALL_DANCER_MODEL_IDS.filter((id) => !this.templates.has(id));
+    if (!remaining.length) return;
+    await this.preloadIds(remaining, onProgress, dancerPreloadConcurrency());
   }
 
   private tryApplyPending(): void {
@@ -273,11 +343,11 @@ export class StageDancers {
     root.traverse((obj) => {
       if (!(obj instanceof THREE.Mesh)) return;
       obj.material = new THREE.MeshStandardMaterial({
-        color: 0x142840,
-        emissive: 0x2a88cc,
-        emissiveIntensity: 0.85,
-        metalness: 0.2,
-        roughness: 0.4,
+        color: 0x3a88b8,
+        emissive: 0x66eeff,
+        emissiveIntensity: 1.35,
+        metalness: 0.38,
+        roughness: 0.26,
         side: THREE.DoubleSide,
         transparent: false,
         opacity: 1,
@@ -535,6 +605,7 @@ export class StageDancers {
     this.maxPerfectTierPlayed = 0;
     this.unbindPerfectFinishHandlers();
     this.layoutKey = '';
+    this.hideStageBackdrops();
     this.clearRoots();
   }
 
@@ -635,7 +706,11 @@ export class StageDancers {
       if (!rightTemplate) return;
       const targetHeight = availH * 0.82;
       const footCanvasY = bounds.hitLineY - 4;
+      const stageCenterCanvasY = bounds.topY + availH * 0.5;
       this.rightRoot.visible = true;
+      this.ensureStageBackdrops(2);
+      this.layoutStageBackdrop(0, this.screenW * 0.26, stageCenterCanvasY, this.screenW * 0.24, availH * 0.88);
+      this.layoutStageBackdrop(1, this.screenW * 0.74, stageCenterCanvasY, this.screenW * 0.24, availH * 0.88);
       this.placeDancer(this.leftRoot, this.screenW * 0.26, this.screenW * 0.22, footCanvasY, targetHeight, leftTemplate);
       this.placeDancer(this.rightRoot, this.screenW * 0.74, this.screenW * 0.22, footCanvasY, targetHeight, rightTemplate);
       return;
@@ -647,6 +722,8 @@ export class StageDancers {
     const centerX = laneEnd + stageW * 0.5;
     const stageCenterCanvasY = bounds.topY + availH * 0.5 + 40;
     const targetHeight = availH * 0.78;
+    this.ensureStageBackdrops(1);
+    this.layoutStageBackdrop(0, centerX, stageCenterCanvasY, stageW * 0.96, availH * 0.9);
     this.placeDancer(
       this.leftRoot, centerX, stageW * 0.88, stageCenterCanvasY, targetHeight, leftTemplate, 'center',
     );
@@ -702,7 +779,17 @@ export class StageDancers {
 
   destroy(): void {
     this.clearRoots();
+    for (const mesh of this.stageBackdrops) {
+      mesh.geometry.dispose();
+      const mat = mesh.material;
+      if (mat instanceof THREE.MeshBasicMaterial) {
+        mat.map?.dispose();
+        mat.dispose();
+      }
+    }
+    this.stageBackdrops = [];
     this.renderer.dispose();
+    disposeGltfLoaders();
     this.layer.remove();
   }
 }

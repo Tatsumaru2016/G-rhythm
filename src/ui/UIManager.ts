@@ -1,6 +1,7 @@
 import type { ChartData, GameStats } from '../types';
 import { LANE_COLORS, LANE_LABELS } from '../types';
 import { CHARTS, getRank, getAccuracy } from '../data/charts';
+import { ddrGradeCssClass, type DdrGrade } from '../scoring/ddrScoring';
 import type { CustomSongLoader } from '../audio/CustomSongLoader';
 import {
   CUSTOM_DIFFICULTIES,
@@ -39,9 +40,36 @@ import {
   type DancerModelId,
 } from '../game/dancerCatalog';
 import type { AudioEngine } from '../audio/AudioEngine';
+import { getResultVoiceId, RESULT_RANK_REVEAL_DELAY_MS } from '../audio/resultVoice';
 import { renderFolderSongList } from './customSongList';
 import { renderChartRatingHtml, renderSongChartAnalysisHtml } from './chartRadarView';
+import {
+  pickRandomCatalogIndex,
+  buildRandomPickRouletteSteps,
+  randomRouletteStepDelay,
+  RANDOM_PICK_AUTO_START_MS,
+  RANDOM_PICK_DECIDE_FLASH_MS,
+  RANDOM_PICK_FLASH_MS,
+  RANDOM_PICK_FLY_MS,
+  RANDOM_PICK_ROULETTE_STOP_MS,
+} from './randomPickSequence';
+import { sortFolderCatalog, folderCatalogDisplayIndex, stepFolderCatalogIndex, firstFolderCatalogIndex, lastFolderCatalogIndex } from '../audio/songCatalogSort';
+import { sortBuiltinIndices } from '../data/builtinCatalogSort';
+import {
+  BUILTIN_SORT_KEYS,
+  FOLDER_SORT_KEYS,
+  isSongSortDirectionEnabled,
+  loadBuiltinSongSort,
+  loadFolderSongSort,
+  saveBuiltinSongSort,
+  saveFolderSongSort,
+  songSortKeyLabelKey,
+  type SongSortDirection,
+  type SongSortKey,
+  type SongSortSettings,
+} from '../settings/songSort';
 import { SelectHubBackground } from './selectHubBackground';
+import { TitleScreenBackground } from './titleScreenBackground';
 import { bindTooltips, updateTooltip, withTooltip } from './tooltip';
 import {
   formatChartBpm,
@@ -60,6 +88,15 @@ import {
 
 const ENABLE_DANCER_DEBUG = false;
 const ENABLE_STAGE_FX_DEBUG = false;
+const SCREEN_BG_CACHE = '20260630';
+
+function screenBgUrl(name: 'select' | 'result'): string {
+  return `${import.meta.env.BASE_URL}images/${name}.png?v=${SCREEN_BG_CACHE}`;
+}
+
+function titleLogoUrl(): string {
+  return `${import.meta.env.BASE_URL}images/logo.png?v=20260630logo3`;
+}
 
 type ScreenId =
   | 'title'
@@ -107,9 +144,16 @@ export class UIManager {
   private customRingKeyHandler: ((e: KeyboardEvent) => void) | null = null;
   private selectHubStartKeyHandler: ((e: KeyboardEvent) => void) | null = null;
   private selectHubPlayClickHandler: ((e: Event) => void) | null = null;
+  private selectHubRandomClickHandler: ((e: Event) => void) | null = null;
   private selectHubBuiltinIndex: number | null = 0;
   private selectHubTrackIndex = 0;
   private selectHubTrackLoadGen = 0;
+  private folderSongSort: SongSortSettings = loadFolderSongSort();
+  private builtinSongSort: SongSortSettings = loadBuiltinSongSort();
+  private randomPickActive = false;
+  private randomPickLocked = false;
+  private randomPickGen = 0;
+  private skipNextGameCountdown = false;
   private screenId: ScreenId = 'none';
   private loadingMessageKey: MessageKey = 'ui.loadingModels';
   private loadingProgress: { loaded: number; total: number } | null = null;
@@ -123,9 +167,11 @@ export class UIManager {
   private countdownChart: ChartData | null = null;
   private resultStats: GameStats | null = null;
   private resultChart: ChartData | null = null;
+  private resultRevealGen = 0;
   private dancerPreviewLeft: DancerModelId = DEFAULT_DANCER_PREVIEW_PAIR[0];
   private dancerPreviewRight: DancerModelId = DEFAULT_DANCER_PREVIEW_PAIR[1];
   private selectHubBg = new SelectHubBackground();
+  private titleBg = new TitleScreenBackground();
 
   constructor(
     overlay: HTMLElement,
@@ -213,9 +259,9 @@ export class UIManager {
   private languageControlHtml(): string {
     const locale = getLocale();
     return `
-      <label class="setting-row language-row">
-        <span>${t('settings.language')}</span>
-        <select id="language-select" class="language-select" aria-label="${t('settings.language')}">
+      <label class="setting-row language-row title-setting-row">
+        <span class="title-setting-label">${t('settings.language')}</span>
+        <select id="language-select" class="language-select title-setting-select" aria-label="${t('settings.language')}">
           <option value="ja" ${locale === 'ja' ? 'selected' : ''}>\u65e5\u672c\u8a9e</option>
           <option value="en" ${locale === 'en' ? 'selected' : ''}>English</option>
         </select>
@@ -258,6 +304,30 @@ export class UIManager {
     void this.audio.resume().then(() => this.audio.playUiDecide());
   }
 
+  private async ensureRandomPickAudio(): Promise<void> {
+    await this.audio.resume();
+    await this.audio.ensureRandomPickSoundsLoaded();
+  }
+
+  private async playRandomPickRoulette(): Promise<void> {
+    await this.ensureRandomPickAudio();
+    this.audio.playRandomPickRoulette();
+  }
+
+  private stopRandomPickRoulette(): void {
+    this.audio.stopRandomPickRoulette();
+  }
+
+  private async playRandomPickSongDecided(): Promise<void> {
+    await this.ensureRandomPickAudio();
+    this.audio.playRandomPickSongDecided();
+  }
+
+  private async playRandomPickPanelLand(): Promise<void> {
+    await this.ensureRandomPickAudio();
+    this.audio.playRandomPickPanelLand();
+  }
+
   private accessibilityNoticeHtml(): string {
     return `
       <div class="accessibility-notice" role="note">
@@ -283,22 +353,43 @@ export class UIManager {
   private titleSoundToggleHtml(): string {
     const on = this.titleSoundEnabled;
     return `
-      <button type="button"
-        class="title-sound-toggle${on ? ' is-preview-playing' : ' is-preview-paused'}"
-        id="title-sound-toggle"
-        aria-pressed="${on}"
-        aria-label="${t('ui.titleSoundToggle')}">
-        ${this.songPreviewStateHtml(undefined, 'ui.titleSoundToggle')}
-      </button>
+      <div class="${this.panelClass('title-sound-panel')}">
+        <div class="settings-panel-body title-sound-panel-body">
+          <div class="title-setting-row title-setting-row--sound">
+            <span class="title-setting-label">${t('ui.titleBgmLabel')}</span>
+            <button type="button"
+              class="title-sound-toggle${on ? ' is-preview-playing' : ' is-preview-paused'}"
+              id="title-sound-toggle"
+              aria-pressed="${on}"
+              aria-label="${t('ui.titleSoundToggle')}">
+              ${this.songPreviewStateHtml(undefined, 'ui.titleSoundToggle')}
+            </button>
+          </div>
+        </div>
+      </div>
     `;
   }
 
   private titleFlashPanelHtml(): string {
     return `
       <div class="${this.panelClass('flash-corner-panel title-flash-panel')}">
-        <div class="settings-panel-body">
-          ${this.flashToggleHtml()}
-          ${this.accessibilityNoticeHtml()}
+        <div class="settings-panel-body title-flash-disclosure" id="title-flash-disclosure">
+          <div class="title-flash-disclosure-head">
+            <button type="button" class="title-flash-disclosure-trigger" id="title-flash-disclosure-trigger"
+              aria-expanded="false" aria-controls="title-flash-disclosure-body"
+              aria-label="${t('ui.flashPanelExpand')}">
+              <span class="title-flash-disclosure-chevron" aria-hidden="true"></span>
+              <span class="title-flash-disclosure-title title-setting-label">${t('settings.reducedFlash')}</span>
+            </button>
+            <label class="setting-toggle title-flash-switch">
+              <input type="checkbox" id="reduced-flash-toggle" ${this.reducedFlash ? 'checked' : ''}
+                aria-label="${t('settings.reducedFlash')}" />
+            </label>
+          </div>
+          <div class="title-flash-disclosure-body" id="title-flash-disclosure-body" hidden>
+            <p class="title-flash-disclosure-hint">${t('settings.reducedFlashHint')}</p>
+            ${this.accessibilityNoticeHtml()}
+          </div>
         </div>
       </div>
     `;
@@ -317,8 +408,11 @@ export class UIManager {
 
   private titleSettingsPanelsHtml(): string {
     return `
-      ${this.languageCornerPanelHtml()}
-      ${this.titleFlashPanelHtml()}
+      <div class="title-settings-column">
+        ${this.titleSoundToggleHtml()}
+        ${this.languageCornerPanelHtml()}
+        ${this.titleFlashPanelHtml()}
+      </div>
       ${this.debugCornerPanelHtml()}
     `;
   }
@@ -346,6 +440,10 @@ export class UIManager {
 
   async syncTitleBgm(): Promise<void> {
     await this.audio.resume();
+    if (this.screenId !== 'title') {
+      this.audio.stopTitleBgm();
+      return;
+    }
     if (this.titleSoundEnabled) {
       await this.audio.playTitleBgm();
     } else {
@@ -353,13 +451,24 @@ export class UIManager {
     }
   }
 
-  private flashToggleHtml(): string {
-    return `
-      <label class="setting-toggle">
-        <input type="checkbox" id="reduced-flash-toggle" ${this.reducedFlash ? 'checked' : ''} />
-        ${withTooltip(`<span>${t('settings.reducedFlash')}</span>`, t('settings.reducedFlashHint'), 'has-tooltip--above')}
-      </label>
-    `;
+  private bindFlashDisclosure(): void {
+    const root = this.overlay.querySelector('#title-flash-disclosure');
+    const trigger = this.overlay.querySelector('#title-flash-disclosure-trigger') as HTMLButtonElement;
+    const body = this.overlay.querySelector('#title-flash-disclosure-body') as HTMLElement;
+    if (!root || !trigger || !body) return;
+
+    const setOpen = (open: boolean) => {
+      root.classList.toggle('is-open', open);
+      trigger.setAttribute('aria-expanded', String(open));
+      trigger.setAttribute('aria-label', t(open ? 'ui.flashPanelCollapse' : 'ui.flashPanelExpand'));
+      body.hidden = !open;
+    };
+
+    trigger.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setOpen(!root.classList.contains('is-open'));
+    });
   }
 
   private applyReducedFlashClass(): void {
@@ -369,6 +478,7 @@ export class UIManager {
   private bindSettingsControls(): void {
     this.bindLanguageControl();
     this.bindTitleSoundToggle();
+    this.bindFlashDisclosure();
 
     const toggle = this.overlay.querySelector('#reduced-flash-toggle') as HTMLInputElement;
     toggle?.addEventListener('change', () => {
@@ -376,6 +486,7 @@ export class UIManager {
       saveReducedFlash(this.reducedFlash);
       this.applyReducedFlashClass();
       this.selectHubBg.setReducedFlash(this.reducedFlash);
+      this.titleBg.setReducedFlash(this.reducedFlash);
     });
 
     const fxSelect = this.overlay.querySelector('#stage-fx-pattern-select') as HTMLSelectElement;
@@ -453,21 +564,30 @@ export class UIManager {
   }
 
   showTitle() {
+    this.resultRevealGen++;
+    this.resetRandomPickState();
     this.screenId = 'title';
     this.unbindSelectHubStart();
     this.unbindCustomRingNavigation();
+    this.stopTitleBackground();
     this.audio.stop();
-    const titleImage = `${import.meta.env.BASE_URL}images/title.png`;
+    const titleLogo = titleLogoUrl();
     const dancerLink = ENABLE_DANCER_DEBUG
       ? `<a href="#" class="title-dancer-preview-link" id="btn-dancer-preview">${t('debug.dancerPreviewLink')}</a>`
       : '';
     this.render(`
       <div class="screen title-screen" id="title-screen">
-        <img class="title-hero" src="${titleImage}" alt="G.RHYTHM" />
-        ${this.titleSoundToggleHtml()}
+        <div class="title-bg-fx" id="title-bg-fx" aria-hidden="true"></div>
+        <div class="title-overlay-fx" aria-hidden="true">
+          <div class="title-scanlines"></div>
+          <div class="title-noise"></div>
+        </div>
+        <div class="title-logo-wrap">
+          <img class="title-logo" src="${titleLogo}" alt="G.DANSYNC" />
+          <p class="title-press-start" role="status">${t('ui.pressAnyKey')}</p>
+        </div>
         ${this.titleSettingsPanelsHtml()}
         ${dancerLink}
-        <p class="title-press-start" role="status">${t('ui.pressAnyKey')}</p>
       </div>
     `);
 
@@ -476,10 +596,12 @@ export class UIManager {
       e.preventDefault();
       e.stopPropagation();
       this.playUiNavigate();
+      this.stopTitleBackground();
       this.showDancerPreview();
     });
     this.bindTitleNavigation(() => this.showSelect());
     this.stopSelectHubBackground();
+    this.mountTitleBackground();
     this.hidePlayHud();
     void this.syncTitleBgm();
   }
@@ -497,6 +619,7 @@ export class UIManager {
   showDancerPreview() {
     this.screenId = 'dancerPreview';
     this.audio.stopTitleBgm();
+    this.stopTitleBackground();
     this.hidePlayHud();
     this.unbindTitleNavigation();
     this.overlay.classList.remove('hidden');
@@ -631,7 +754,8 @@ export class UIManager {
   private selectHubLeftRailHtml(): string {
     return `
       <aside class="select-hub-left-rail" aria-label="${t('ui.selectSongList')}">
-        <div class="select-hub-rail-top">
+        ${this.builtinSongSortBarHtml()}
+        <div class="select-hub-rail-top" id="select-hub-builtin-rail">
           ${this.selectHubBuiltinCardsHtml()}
         </div>
       </aside>
@@ -644,6 +768,7 @@ export class UIManager {
         <div class="select-hub-right-custom">
           ${this.selectHubCustomPanelHtml()}
         </div>
+        ${this.folderSongSortBarHtml()}
         <div class="select-hub-right-list" id="folder-song-list">
           <div class="folder-song-list-track" id="folder-song-list-track"></div>
         </div>
@@ -651,8 +776,85 @@ export class UIManager {
     `;
   }
 
+  private songSortOptionsHtml(
+    keys: readonly SongSortKey[],
+    selected: SongSortKey,
+  ): string {
+    return keys.map((key) => `
+      <option value="${key}"${key === selected ? ' selected' : ''}>
+        ${t(songSortKeyLabelKey(key))}
+      </option>
+    `).join('');
+  }
+
+  private songSortDirectionButtonsHtml(
+    prefix: 'builtin' | 'folder',
+    settings: SongSortSettings,
+  ): string {
+    const enabled = isSongSortDirectionEnabled(settings);
+    return `
+      <div
+        class="song-sort-direction${enabled ? '' : ' is-disabled'}"
+        role="group"
+        aria-label="${t('ui.songSortDirection')}"
+      >
+        <button
+          type="button"
+          id="${prefix}-song-sort-asc"
+          class="song-sort-dir-btn${settings.direction === 'asc' ? ' is-active' : ''}"
+          data-dir="asc"
+          aria-label="${t('ui.songSort.asc')}"
+          aria-pressed="${settings.direction === 'asc'}"
+          ${enabled ? '' : 'disabled'}
+        >▲</button>
+        <button
+          type="button"
+          id="${prefix}-song-sort-desc"
+          class="song-sort-dir-btn${settings.direction === 'desc' ? ' is-active' : ''}"
+          data-dir="desc"
+          aria-label="${t('ui.songSort.desc')}"
+          aria-pressed="${settings.direction === 'desc'}"
+          ${enabled ? '' : 'disabled'}
+        >▼</button>
+      </div>
+    `;
+  }
+
+  private songSortBarHtml(
+    prefix: 'builtin' | 'folder',
+    settings: SongSortSettings,
+    keys: readonly SongSortKey[],
+  ): string {
+    return `
+      <div class="song-sort-bar" id="${prefix}-song-sort-bar">
+        <div class="song-sort-control">
+          <span class="song-sort-label">${t('ui.songSort')}</span>
+          <select
+            id="${prefix}-song-sort-key"
+            class="song-sort-select"
+            aria-label="${t('ui.songSort')}"
+          >
+            ${this.songSortOptionsHtml(keys, settings.key)}
+          </select>
+          ${this.songSortDirectionButtonsHtml(prefix, settings)}
+        </div>
+      </div>
+    `;
+  }
+
+  private builtinSongSortBarHtml(): string {
+    return this.songSortBarHtml('builtin', this.builtinSongSort, BUILTIN_SORT_KEYS);
+  }
+
+  private folderSongSortBarHtml(): string {
+    return this.songSortBarHtml('folder', this.folderSongSort, FOLDER_SORT_KEYS);
+  }
+
   private selectHubBuiltinCardsHtml(): string {
-    return CHARTS.map((chart, i) => `
+    const order = sortBuiltinIndices(CHARTS, this.builtinSongSort);
+    return order.map((i) => {
+      const chart = CHARTS[i];
+      return `
       <button
         type="button"
         class="select-hub-builtin-card${this.selectHubBuiltinIndex === i ? ' is-selected' : ''}"
@@ -663,7 +865,8 @@ export class UIManager {
         <span class="select-hub-builtin-title">${this.escapeHtml(chart.title)}</span>
         <span class="select-hub-builtin-meta">${formatChartBpm(chart.bpm)} \u00b7 ${formatNotesCount(chart.notes.length)}</span>
       </button>
-    `).join('');
+    `;
+    }).join('');
   }
 
   private customDifficultyOptionsHtml(): string {
@@ -796,17 +999,21 @@ export class UIManager {
   }
 
   async showSelect() {
+    this.resultRevealGen++;
+    this.resetRandomPickState();
+    this.screenId = 'select';
+    this.audio.stopTitleBgm();
+    this.audio.stopPreviewPlayback();
+
     await this.tryRestoreLastCustomFolder(true);
 
-    this.screenId = 'select';
+    this.stopTitleBackground();
     this.unbindTitleNavigation();
     this.unbindCustomRingNavigation();
     this.unbindSelectHubStart();
     this.stopSelectHubBackground();
-    this.audio.stopTitleBgm();
-    this.audio.stopPreviewPlayback();
 
-    const selectImage = `${import.meta.env.BASE_URL}images/select.png`;
+    const selectImage = screenBgUrl('select');
     const isBuiltin = this.selectHubBuiltinIndex !== null;
     const folderListMode = !isBuiltin && this.shouldShowFolderSongList();
 
@@ -839,6 +1046,11 @@ export class UIManager {
           ${this.selectHubDifficultyDockHtml()}
         </div>
         ${this.selectHubNavHtml()}
+        <div class="random-pick-fx" id="random-pick-fx" hidden aria-live="polite">
+          <div class="random-pick-fx-card">
+            <span class="random-pick-fx-label" id="random-pick-fx-label"></span>
+          </div>
+        </div>
         <input type="file" id="audio-file-input" accept="audio/*,.mp3,.wav,.ogg,.flac,.m4a,.aac,.webm" hidden />
         <input type="file" id="audio-folder-input" accept="audio/*,.mp3,.wav,.ogg,.flac,.m4a,.aac,.webm" webkitdirectory multiple hidden />
       </div>
@@ -857,7 +1069,14 @@ export class UIManager {
             <path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
           </svg>
         </button>
-        <button type="button" class="btn-select-start" id="btn-select-start" aria-label="${t('ui.play')}">${t('ui.play')}</button>
+        <div class="select-hub-play-cluster">
+          <button type="button" class="btn-select-start" id="btn-select-start" aria-label="${t('ui.play')}">
+            <span class="select-play-label">${t('ui.play')}</span>
+          </button>
+          <button type="button" class="btn-select-random" id="btn-select-random" aria-label="${t('ui.randomPlay')}">
+            <span class="select-play-label">${t('ui.randomPlay')}</span>
+          </button>
+        </div>
       </nav>
     `;
   }
@@ -876,17 +1095,23 @@ export class UIManager {
     this.selectHubBg.unmount();
   }
 
+  private mountTitleBackground(): void {
+    const host = this.overlay.querySelector('#title-bg-fx');
+    if (!host) return;
+    this.titleBg.setReducedFlash(this.reducedFlash);
+    this.titleBg.mount(host as HTMLElement);
+  }
+
+  private stopTitleBackground(): void {
+    this.titleBg.unmount();
+  }
+
   private bindSelectHub(): void {
     const fileInput = this.overlay.querySelector('#audio-file-input') as HTMLInputElement;
     const folderInput = this.overlay.querySelector('#audio-folder-input') as HTMLInputElement;
 
-    this.overlay.querySelectorAll('.select-hub-builtin-card').forEach((card) => {
-      card.addEventListener('click', () => {
-        const index = Number((card as HTMLElement).dataset.builtinIndex);
-        if (Number.isNaN(index)) return;
-        this.selectSelectHubBuiltin(index);
-      });
-    });
+    this.bindSelectHubBuiltinCardClicks();
+    this.bindSongSortControls();
 
     const customPanel = this.overlay.querySelector('#select-hub-custom-panel');
     customPanel?.addEventListener('click', (e) => {
@@ -950,10 +1175,12 @@ export class UIManager {
     this.bindSelectHubStart();
     this.bindSelectHubDifficultyDock();
     this.bindSelectHubNav();
+    this.syncRandomPlayButton();
   }
 
   private bindSelectHubNav(): void {
     this.overlay.querySelector('#btn-goto-title')?.addEventListener('click', () => {
+      if (this.isRandomPickLocked()) return;
       this.playUiNavigate();
       this.customLoader.clear();
       this.selectHubBuiltinIndex = 0;
@@ -1022,6 +1249,345 @@ export class UIManager {
     updateChart();
   }
 
+  private canRandomFolderPlay(): boolean {
+    return this.customLoader.isFolderMode() && this.customLoader.getCatalog().length > 0;
+  }
+
+  consumeSkipGameCountdown(): boolean {
+    const skip = this.skipNextGameCountdown;
+    this.skipNextGameCountdown = false;
+    return skip;
+  }
+
+  private resetRandomPickState(): void {
+    this.randomPickGen++;
+    this.randomPickActive = false;
+    this.randomPickLocked = false;
+    this.skipNextGameCountdown = false;
+    this.stopRandomPickRoulette();
+    this.syncRandomPickLockUi();
+  }
+
+  private isRandomPickLocked(): boolean {
+    return this.randomPickActive || this.randomPickLocked;
+  }
+
+  private syncRandomPickLockUi(): void {
+    const screen = this.overlay.querySelector('#select-hub-screen');
+    screen?.classList.toggle('is-random-pick-active', this.randomPickActive);
+    screen?.classList.toggle('is-random-pick-locked', this.randomPickLocked);
+    screen?.classList.remove('is-random-pick-reveal', 'is-random-pick-decide');
+
+    const fx = this.overlay.querySelector('#random-pick-fx') as HTMLElement | null;
+    if (fx) fx.hidden = true;
+
+    this.overlay.querySelector('#song-ring-center')
+      ?.classList.remove(
+        'is-random-pick-reveal',
+        'is-random-pick-locked-panel',
+        'is-random-pick-landed',
+        'is-random-pick-flash',
+      );
+    this.clearRandomPickListHighlight();
+    this.removeRandomPickFlyClone();
+    this.syncRandomPlayButton();
+  }
+
+  private removeRandomPickFlyClone(): void {
+    document.querySelector('.random-pick-fly-clone')?.remove();
+  }
+
+  private syncRandomPlayButton(): void {
+    const randomBtn = this.overlay.querySelector('#btn-select-random') as HTMLButtonElement | null;
+    const playBtn = this.overlay.querySelector('#btn-select-start') as HTMLButtonElement | null;
+    const locked = this.isRandomPickLocked() || this.isSelectHubRingLoading();
+    if (randomBtn) {
+      randomBtn.disabled = !this.canRandomFolderPlay() || locked;
+    }
+    if (playBtn) {
+      playBtn.disabled = locked;
+    }
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => window.setTimeout(resolve, ms));
+  }
+
+  private setRandomPickFx(label: string, phase: 'spin' | 'reveal' | 'decide' | 'hidden'): void {
+    const fx = this.overlay.querySelector('#random-pick-fx') as HTMLElement | null;
+    const labelEl = this.overlay.querySelector('#random-pick-fx-label');
+    const screen = this.overlay.querySelector('#select-hub-screen');
+    if (!fx || !labelEl) return;
+
+    if (phase === 'hidden') {
+      fx.hidden = true;
+      screen?.classList.remove('is-random-pick-reveal', 'is-random-pick-decide');
+      return;
+    }
+
+    fx.hidden = false;
+    labelEl.textContent = label;
+    screen?.classList.toggle('is-random-pick-reveal', phase === 'reveal');
+    screen?.classList.toggle('is-random-pick-decide', phase === 'decide');
+  }
+
+  private async revealRandomPickDecision(gen: number, catalogIndex: number): Promise<boolean> {
+    if (gen !== this.randomPickGen || this.screenId !== 'select') return false;
+
+    this.focusRandomPickSong(catalogIndex);
+    const center = this.overlay.querySelector('#song-ring-center');
+    center?.classList.remove('is-random-pick-flash', 'is-random-pick-landed');
+    void (center as HTMLElement | undefined)?.offsetWidth;
+    center?.classList.add('is-random-pick-landed');
+    await this.playRandomPickPanelLand();
+
+    this.setRandomPickFx(t('ui.randomPickSongDecided'), 'decide');
+    await this.playRandomPickSongDecided();
+
+    await this.sleep(RANDOM_PICK_DECIDE_FLASH_MS);
+    if (gen !== this.randomPickGen || this.screenId !== 'select') return false;
+
+    center?.classList.remove('is-random-pick-landed');
+    center?.classList.add('is-random-pick-locked-panel');
+    return true;
+  }
+
+  private clearRandomPickListHighlight(): void {
+    this.overlay.querySelectorAll('.folder-song-item').forEach((item) => {
+      item.classList.remove('is-random-pick-source', 'is-random-pick-final', 'is-random-scroll-candidate');
+    });
+  }
+
+  private setRandomScrollCandidate(catalogIndex: number): void {
+    const catalog = this.customLoader.getCatalog();
+    const entry = catalog[catalogIndex];
+    if (!entry) return;
+
+    this.overlay.querySelectorAll('.folder-song-item').forEach((item) => {
+      const idx = Number((item as HTMLElement).dataset.listIndex);
+      const active = idx === catalogIndex;
+      item.classList.toggle('is-random-scroll-candidate', active);
+      item.classList.toggle('is-random-pick-final', false);
+      item.classList.toggle('is-selected', false);
+    });
+
+    const el = this.overlay.querySelector(
+      `.folder-song-item[data-list-index="${catalogIndex}"]`,
+    ) as HTMLElement | null;
+    el?.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+  }
+
+  private async animateRandomPickRoulette(
+    fromIndex: number,
+    toIndex: number,
+    gen: number,
+  ): Promise<boolean> {
+    const catalog = this.customLoader.getCatalog();
+    const rows = sortFolderCatalog(
+      catalog,
+      this.folderSongSort,
+      (track) => this.folderTrackSortMeta(track),
+    );
+    const catalogIndices = rows.map((row) => row.catalogIndex);
+    const steps = buildRandomPickRouletteSteps(catalogIndices, fromIndex, toIndex);
+    const total = Math.max(steps.length - 1, 1);
+
+    this.setRandomPickFx(t('ui.randomPickSpinning'), 'spin');
+    await this.playRandomPickRoulette();
+
+    let aborted = false;
+    try {
+      for (let i = 0; i < steps.length - 1; i++) {
+        if (gen !== this.randomPickGen || this.screenId !== 'select') {
+          aborted = true;
+          return false;
+        }
+        this.setRandomScrollCandidate(steps[i]);
+        await this.sleep(randomRouletteStepDelay(i, total));
+      }
+
+      if (gen !== this.randomPickGen || this.screenId !== 'select') {
+        aborted = true;
+        return false;
+      }
+
+      const finalIndex = steps[steps.length - 1];
+      this.overlay.querySelectorAll('.folder-song-item').forEach((item) => {
+        item.classList.remove('is-random-scroll-candidate');
+      });
+      this.focusRandomPickSong(finalIndex);
+      await this.sleep(RANDOM_PICK_ROULETTE_STOP_MS);
+
+      return gen === this.randomPickGen && this.screenId === 'select';
+    } finally {
+      if (aborted) this.stopRandomPickRoulette();
+    }
+  }
+
+  private focusRandomPickSong(catalogIndex: number): void {
+    const catalog = this.customLoader.getCatalog();
+    const entry = catalog[catalogIndex];
+    if (!entry) return;
+
+    this.overlay.querySelectorAll('.folder-song-item').forEach((item) => {
+      const idx = Number((item as HTMLElement).dataset.listIndex);
+      const active = idx === catalogIndex;
+      item.classList.toggle('is-random-pick-final', active);
+      item.classList.toggle('is-selected', active);
+    });
+
+    const el = this.overlay.querySelector(
+      `.folder-song-item[data-list-index="${catalogIndex}"]`,
+    ) as HTMLElement | null;
+    el?.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+    this.setRingCenterTitle(entry.title);
+  }
+
+  private async flashRandomPickCenter(): Promise<void> {
+    const center = this.overlay.querySelector('#song-ring-center');
+    center?.classList.remove('is-random-pick-flash');
+    void (center as HTMLElement | undefined)?.offsetWidth;
+    center?.classList.add('is-random-pick-flash');
+    await this.sleep(RANDOM_PICK_FLASH_MS);
+    center?.classList.remove('is-random-pick-flash');
+  }
+
+  private async animateRandomPickFlyToCenter(
+    catalogIndex: number,
+    gen: number,
+  ): Promise<boolean> {
+    const catalog = this.customLoader.getCatalog();
+    const entry = catalog[catalogIndex];
+    if (!entry) return false;
+
+    const listItem = this.overlay.querySelector(
+      `.folder-song-item[data-list-index="${catalogIndex}"]`,
+    ) as HTMLElement | null;
+    const center = this.overlay.querySelector('#song-ring-center') as HTMLElement | null;
+
+    if (!listItem || !center) {
+      this.focusRandomPickSong(catalogIndex);
+      await this.flashRandomPickCenter();
+      return gen === this.randomPickGen && this.screenId === 'select';
+    }
+
+    listItem.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+    await this.sleep(16);
+    if (gen !== this.randomPickGen || this.screenId !== 'select') return false;
+
+    const from = listItem.getBoundingClientRect();
+    const to = center.getBoundingClientRect();
+    const fromCx = from.left + from.width / 2;
+    const fromCy = from.top + from.height / 2;
+    const toCx = to.left + to.width / 2;
+    const toCy = to.top + to.height / 2;
+    const scaleEnd = Math.min(1, Math.max(0.55, to.width / Math.max(from.width, 1)));
+
+    this.removeRandomPickFlyClone();
+    listItem.classList.add('is-random-pick-source');
+
+    const clone = document.createElement('div');
+    clone.className = 'random-pick-fly-clone';
+    clone.innerHTML = `<span class="random-pick-fly-clone-inner">${this.escapeHtml(entry.title)}</span>`;
+    clone.style.width = `${from.width}px`;
+    clone.style.height = `${from.height}px`;
+    document.body.appendChild(clone);
+
+    const anim = clone.animate([
+      {
+        transform: `translate(${fromCx}px, ${fromCy}px) translate(-50%, -50%) scale(1)`,
+        opacity: 1,
+      },
+      {
+        transform: `translate(${toCx}px, ${toCy}px) translate(-50%, -50%) scale(${scaleEnd})`,
+        opacity: 0.94,
+      },
+    ], {
+      duration: RANDOM_PICK_FLY_MS,
+      easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+      fill: 'forwards',
+    });
+
+    await new Promise<void>((resolve) => {
+      anim.onfinish = () => resolve();
+      anim.oncancel = () => resolve();
+    });
+
+    this.removeRandomPickFlyClone();
+    listItem.classList.remove('is-random-pick-source');
+
+    if (gen !== this.randomPickGen || this.screenId !== 'select') return false;
+
+    return gen === this.randomPickGen && this.screenId === 'select';
+  }
+
+  private async waitRandomPickAutoStart(gen: number): Promise<boolean> {
+    await this.sleep(RANDOM_PICK_AUTO_START_MS);
+    return gen === this.randomPickGen && this.screenId === 'select';
+  }
+
+  private async startRandomFolderChart(): Promise<void> {
+    if (this.screenId !== 'select') return;
+    if (!this.canRandomFolderPlay() || this.isSelectHubRingLoading() || this.randomPickActive) return;
+
+    const catalog = this.customLoader.getCatalog();
+    const current = this.customLoader.getSelectedIndex();
+    const finalIndex = pickRandomCatalogIndex(catalog.length, current);
+    const gen = ++this.randomPickGen;
+
+    this.randomPickActive = true;
+    this.randomPickLocked = false;
+    this.syncRandomPickLockUi();
+    this.unbindCustomRingNavigation();
+    this.audio.stopPreviewPlayback();
+
+    let completed = false;
+    try {
+      await this.ensureRandomPickAudio();
+
+      const loadPromise = this.loadSelectHubTrack(finalIndex, { silent: true });
+
+      const rouletted = await this.animateRandomPickRoulette(current, finalIndex, gen);
+      if (!rouletted) return;
+
+      this.setRandomPickFx('', 'hidden');
+      const flew = await this.animateRandomPickFlyToCenter(finalIndex, gen);
+      if (!flew) return;
+
+      await loadPromise;
+      if (gen !== this.randomPickGen || this.screenId !== 'select' || this.isSelectHubRingLoading()) return;
+
+      const chart = this.selectedChart;
+      if (!chart || chart.notes.length === 0) return;
+
+      this.randomPickActive = false;
+      this.randomPickLocked = true;
+      const screen = this.overlay.querySelector('#select-hub-screen');
+      screen?.classList.remove('is-random-pick-active');
+      screen?.classList.add('is-random-pick-locked');
+      this.syncRandomPlayButton();
+
+      const revealed = await this.revealRandomPickDecision(gen, finalIndex);
+      if (!revealed) return;
+
+      const ready = await this.waitRandomPickAutoStart(gen);
+      if (!ready) return;
+
+      this.setRandomPickFx('', 'hidden');
+      this.overlay.querySelector('#song-ring-center')?.classList.remove('is-random-pick-locked-panel');
+      this.skipNextGameCountdown = true;
+      this.startSelectedChart();
+      completed = true;
+    } finally {
+      if (!completed && gen === this.randomPickGen) {
+        this.resetRandomPickState();
+        if (this.screenId === 'select' && this.customLoader.isFolderMode()) {
+          this.bindSelectHubRing();
+        }
+      }
+    }
+  }
+
   private startSelectedChart(): void {
     if (this.screenId !== 'select') return;
     if (this.isSelectHubRingLoading()) return;
@@ -1055,12 +1621,18 @@ export class UIManager {
         ?.removeEventListener('click', this.selectHubPlayClickHandler);
       this.selectHubPlayClickHandler = null;
     }
+    if (this.selectHubRandomClickHandler) {
+      this.overlay.querySelector('#btn-select-random')
+        ?.removeEventListener('click', this.selectHubRandomClickHandler);
+      this.selectHubRandomClickHandler = null;
+    }
   }
 
   private bindSelectHubStart(): void {
     this.unbindSelectHubStart();
     this.selectHubStartKeyHandler = (e: KeyboardEvent) => {
       if (e.repeat) return;
+      if (this.isRandomPickLocked()) return;
       if (this.screenId !== 'select') return;
       if (!this.overlay.querySelector('#select-hub-screen')) return;
       if (e.key !== 'Enter') return;
@@ -1070,6 +1642,7 @@ export class UIManager {
         void this.startSelectedChart();
         return;
       }
+      if (target.closest('#btn-select-random')) return;
       if (target.closest('input, select, textarea, button, .select-hub-import-btn')) return;
       e.preventDefault();
       void this.startSelectedChart();
@@ -1086,6 +1659,17 @@ export class UIManager {
       playBtn.addEventListener('click', this.selectHubPlayClickHandler);
     }
 
+    const randomBtn = this.overlay.querySelector('#btn-select-random');
+    if (randomBtn) {
+      this.selectHubRandomClickHandler = (e: Event) => {
+        e.preventDefault();
+        e.stopPropagation();
+        void this.startRandomFolderChart();
+      };
+      randomBtn.addEventListener('click', this.selectHubRandomClickHandler);
+    }
+    this.syncRandomPlayButton();
+
     const center = this.overlay.querySelector('#song-ring-center');
     center?.addEventListener('dblclick', () => {
       void this.startSelectedChart();
@@ -1094,24 +1678,42 @@ export class UIManager {
 
   private bindSelectHubFolderNav(): void {
     const jump = (index: number) => {
+      if (this.isRandomPickLocked()) return;
       void this.loadSelectHubTrack(index);
     };
     const rotate = (delta: number) => {
+      if (this.isRandomPickLocked()) return;
       const tracks = this.customLoader.getCatalog();
       if (tracks.length <= 1) return;
       this.playUiNavigate();
       const current = this.customLoader.getSelectedIndex();
-      const next = (current + delta + tracks.length) % tracks.length;
+      const next = stepFolderCatalogIndex(
+        tracks,
+        this.folderSongSort,
+        current,
+        delta,
+        (track) => this.folderTrackSortMeta(track),
+      );
       void this.loadSelectHubTrack(next);
     };
 
     this.bindCustomRingNavigation(
-      () => jump(0),
+      () => jump(firstFolderCatalogIndex(
+        this.customLoader.getCatalog(),
+        this.folderSongSort,
+        (track) => this.folderTrackSortMeta(track),
+      )),
       () => rotate(-1),
       () => rotate(1),
       () => {
         const tracks = this.customLoader.getCatalog();
-        if (tracks.length > 0) jump(tracks.length - 1);
+        if (tracks.length > 0) {
+          jump(lastFolderCatalogIndex(
+            tracks,
+            this.folderSongSort,
+            (track) => this.folderTrackSortMeta(track),
+          ));
+        }
       },
     );
 
@@ -1255,6 +1857,7 @@ export class UIManager {
       this.overlay.querySelector('#song-ring-center'),
       () => false,
     );
+    this.syncRandomPlayButton();
   }
 
   private refreshSelectHubSidebarSelection(): void {
@@ -1274,6 +1877,106 @@ export class UIManager {
     );
   }
 
+  private refreshSelectHubBuiltinCards(): void {
+    const rail = this.overlay.querySelector('#select-hub-builtin-rail');
+    if (!rail) return;
+    rail.innerHTML = this.selectHubBuiltinCardsHtml();
+    this.bindSelectHubBuiltinCardClicks();
+  }
+
+  private bindSelectHubBuiltinCardClicks(): void {
+    this.overlay.querySelectorAll('.select-hub-builtin-card').forEach((card) => {
+      card.addEventListener('click', () => {
+        if (this.isRandomPickLocked()) return;
+        const index = Number((card as HTMLElement).dataset.builtinIndex);
+        if (Number.isNaN(index)) return;
+        this.selectSelectHubBuiltin(index);
+      });
+    });
+  }
+
+  private folderTrackSortMeta(track: { file: File }) {
+    return this.customLoader.getTrackSortMeta(track.file);
+  }
+
+  private syncSongSortDirectionUi(prefix: 'builtin' | 'folder', settings: SongSortSettings): void {
+    const enabled = isSongSortDirectionEnabled(settings);
+    const group = this.overlay.querySelector(`#${prefix}-song-sort-bar .song-sort-direction`);
+    group?.classList.toggle('is-disabled', !enabled);
+    group?.querySelectorAll<HTMLButtonElement>('.song-sort-dir-btn').forEach((btn) => {
+      const dir = btn.dataset.dir as SongSortDirection;
+      const active = enabled && settings.direction === dir;
+      btn.disabled = !enabled;
+      btn.classList.toggle('is-active', active);
+      btn.setAttribute('aria-pressed', String(active));
+    });
+  }
+
+  private applyBuiltinSongSort(settings: SongSortSettings): void {
+    this.builtinSongSort = settings;
+    saveBuiltinSongSort(settings);
+    this.syncSongSortDirectionUi('builtin', settings);
+    this.refreshSelectHubBuiltinCards();
+  }
+
+  private applyFolderSongSort(settings: SongSortSettings): void {
+    this.folderSongSort = settings;
+    saveFolderSongSort(settings);
+    this.syncSongSortDirectionUi('folder', settings);
+    this.refreshSelectHubSongList();
+    const chart = this.selectedChart;
+    const catalog = this.customLoader.getCatalog();
+    if (chart && catalog.length > 0) {
+      const idx = this.customLoader.getSelectedIndex();
+      const entry = catalog[idx];
+      this.updateSelectHubCenterFromChart(
+        chart,
+        entry?.title ?? chart.title,
+        chart.audioDuration ?? 0,
+      );
+    }
+  }
+
+  private bindSongSortControls(): void {
+    const bind = (
+      prefix: 'builtin' | 'folder',
+      keys: readonly SongSortKey[],
+      getSettings: () => SongSortSettings,
+      apply: (settings: SongSortSettings) => void,
+    ) => {
+      const keySelect = this.overlay.querySelector(`#${prefix}-song-sort-key`) as HTMLSelectElement | null;
+      if (keySelect && keySelect.dataset.bound !== '1') {
+        keySelect.dataset.bound = '1';
+        keySelect.addEventListener('change', () => {
+          if (this.isRandomPickLocked()) return;
+          const key = keySelect.value as SongSortKey;
+          if (!keys.includes(key)) return;
+          const current = getSettings();
+          if (key === current.key) return;
+          this.playUiSelect();
+          apply({ key, direction: current.direction });
+        });
+      }
+
+      this.overlay.querySelectorAll(`#${prefix}-song-sort-bar .song-sort-dir-btn`).forEach((btn) => {
+        const el = btn as HTMLButtonElement;
+        if (el.dataset.bound === '1') return;
+        el.dataset.bound = '1';
+        el.addEventListener('click', () => {
+          if (this.isRandomPickLocked()) return;
+          const direction = el.dataset.dir as SongSortDirection;
+          const current = getSettings();
+          if (!isSongSortDirectionEnabled(current) || current.direction === direction) return;
+          this.playUiSelect();
+          apply({ key: current.key, direction });
+        });
+      });
+    };
+
+    bind('builtin', BUILTIN_SORT_KEYS, () => this.builtinSongSort, (s) => this.applyBuiltinSongSort(s));
+    bind('folder', FOLDER_SORT_KEYS, () => this.folderSongSort, (s) => this.applyFolderSongSort(s));
+  }
+
   private refreshSelectHubSongList(): void {
     const track = this.overlay.querySelector('#folder-song-list-track');
     if (!track) return;
@@ -1283,7 +1986,12 @@ export class UIManager {
     }
     const catalog = this.customLoader.getCatalog();
     const selected = this.customLoader.getSelectedIndex();
-    track.innerHTML = renderFolderSongList(catalog, selected);
+    const rows = sortFolderCatalog(
+      catalog,
+      this.folderSongSort,
+      (track) => this.folderTrackSortMeta(track),
+    );
+    track.innerHTML = renderFolderSongList(rows, selected);
     const selectedEl = track.querySelector('.folder-song-item.is-selected');
     selectedEl?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }
@@ -1293,6 +2001,7 @@ export class UIManager {
     if (!track || track.dataset.listBound === '1') return;
     track.dataset.listBound = '1';
     track.addEventListener('click', (e) => {
+      if (this.isRandomPickLocked()) return;
       const btn = (e.target as Element).closest('.folder-song-item');
       if (!btn) return;
       const index = Number((btn as HTMLElement).dataset.listIndex);
@@ -1332,12 +2041,14 @@ export class UIManager {
         this.syncPreviewToggleState(center, false);
       }
       this.updateSelectHubDpadEnabled();
+      this.syncRandomPlayButton();
       return;
     }
     this.overlay.querySelector('#select-hub-screen')?.classList.toggle('is-loading-track', loading);
     const center = this.overlay.querySelector('#song-ring-center');
     this.syncPreviewToggleState(center, loading);
     this.updateSelectHubDpadEnabled();
+    this.syncRandomPlayButton();
   }
 
   private updateSelectHubCenterFromChart(chart: ChartData, title: string, duration: number): void {
@@ -1361,8 +2072,14 @@ export class UIManager {
     if (counterEl) {
       if (!isBuiltin && catalog.length > 1) {
         const idx = this.customLoader.getSelectedIndex();
+        const displayIndex = folderCatalogDisplayIndex(
+          catalog,
+          this.folderSongSort,
+          idx,
+          (track) => this.folderTrackSortMeta(track),
+        );
         counterEl.textContent = t('ui.customFolderTrack', {
-          current: idx + 1,
+          current: displayIndex + 1,
           total: catalog.length,
         });
       } else {
@@ -1390,8 +2107,14 @@ export class UIManager {
       this.setRingCenterTitle(entry.title);
       const counterEl = this.overlay.querySelector('#ring-track-counter');
       if (counterEl && catalog.length > 1) {
+        const displayIndex = folderCatalogDisplayIndex(
+          catalog,
+          this.folderSongSort,
+          index,
+          (track) => this.folderTrackSortMeta(track),
+        );
         counterEl.textContent = t('ui.customFolderTrack', {
-          current: index + 1,
+          current: displayIndex + 1,
           total: catalog.length,
         });
       }
@@ -1419,6 +2142,9 @@ export class UIManager {
       const chart = this.customLoader.buildChart(this.customBpm, this.customOffset, this.customDifficulty);
       this.selectedChart = chart;
       this.updateSelectHubCenterFromChart(chart, meta.title, meta.duration);
+      if (this.folderSongSort.key === 'bpm' || this.folderSongSort.key === 'duration') {
+        this.refreshSelectHubSongList();
+      }
 
       if (this.audio.isPreviewEnabled()) {
         await this.audio.startUserPreview();
@@ -1740,6 +2466,7 @@ export class UIManager {
   }
 
   prepareForGameplay() {
+    this.resetRandomPickState();
     this.screenId = 'none';
     this.clearTouchZones();
     this.hidePlayHud();
@@ -1810,16 +2537,16 @@ export class UIManager {
     this.lastChart = chart;
     this.overlay.classList.remove('hidden');
 
-    const rank = getRank(stats, chart.notes.length);
+    const grade = getRank(stats, chart);
     const acc = getAccuracy(stats);
-    const rankClass = rank.replace('+', '-plus');
-    const resultImage = `${import.meta.env.BASE_URL}images/result.png`;
+    const rankClass = ddrGradeCssClass(grade);
+    const resultImage = screenBgUrl('result');
 
     this.render(`
       <div class="screen result-screen">
         <img class="result-hero" src="${resultImage}" alt="" />
-        <div class="result-panel panel-right">
-          <div class="result-rank rank-${rankClass}">${rank}</div>
+        <div class="result-panel">
+          <div class="result-rank result-rank-pending" id="result-rank-slot" aria-live="polite">···</div>
           <h2 class="result-title">${this.escapeHtml(chart.title)}</h2>
           <div class="result-score">${stats.score.toLocaleString()}</div>
           <div class="result-grid">
@@ -1841,17 +2568,36 @@ export class UIManager {
 
     this.overlay.querySelector('#btn-retry')?.addEventListener('click', () => {
       if (this.lastChart) {
+        this.resultRevealGen++;
         this.playUiDecide();
         this.overlay.innerHTML = '';
         this.onStart(this.lastChart);
       }
     });
     this.overlay.querySelector('#btn-menu')?.addEventListener('click', () => {
+      this.resultRevealGen++;
       this.playUiNavigate();
       if (!this.lastChart?.customAudio) this.customLoader.clear();
       this.onBack();
       this.showSelect();
     });
+
+    void this.runResultRevealSequence(grade, rankClass);
+  }
+
+  private async runResultRevealSequence(grade: DdrGrade, rankClass: string): Promise<void> {
+    const token = ++this.resultRevealGen;
+    await this.audio.playResultAnnounce();
+    if (token !== this.resultRevealGen || this.screenId !== 'result') return;
+    await new Promise((r) => setTimeout(r, RESULT_RANK_REVEAL_DELAY_MS));
+    if (token !== this.resultRevealGen || this.screenId !== 'result') return;
+
+    const rankEl = this.overlay.querySelector('#result-rank-slot');
+    if (rankEl) {
+      rankEl.textContent = grade;
+      rankEl.className = `result-rank ${rankClass} result-rank-revealed`;
+    }
+    void this.audio.playResultVoice(getResultVoiceId(grade));
   }
 
   showTouchZones(layoutGetter: () => TouchZoneLayout): HTMLElement[] {

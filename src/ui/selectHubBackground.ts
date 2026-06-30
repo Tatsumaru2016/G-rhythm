@@ -1,3 +1,6 @@
+import { menuBackgroundFps, useLiteMenuBackground } from '../perf/webPerf';
+import { MenuCanvasLoop } from './menuCanvasLoop';
+
 interface HubParticle {
   x: number;
   y: number;
@@ -13,7 +16,8 @@ export class SelectHubBackground {
   private host: HTMLElement | null = null;
   private canvas: HTMLCanvasElement | null = null;
   private ctx: CanvasRenderingContext2D | null = null;
-  private raf = 0;
+  private loop = new MenuCanvasLoop(menuBackgroundFps(), () => this.tick());
+  private readonly lite = useLiteMenuBackground();
   private particles: HubParticle[] = [];
   private reducedFlash = false;
   private readonly onResize = () => this.resize();
@@ -38,12 +42,11 @@ export class SelectHubBackground {
     this.resize();
     this.initParticles();
     window.addEventListener('resize', this.onResize);
-    this.loop();
+    this.loop.start();
   }
 
   unmount(): void {
-    if (this.raf) cancelAnimationFrame(this.raf);
-    this.raf = 0;
+    this.loop.stop();
     window.removeEventListener('resize', this.onResize);
     this.host?.replaceChildren();
     this.host = null;
@@ -55,21 +58,22 @@ export class SelectHubBackground {
   private resize(): void {
     if (!this.canvas || !this.host) return;
     const rect = this.host.getBoundingClientRect();
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const dpr = Math.min(window.devicePixelRatio || 1, this.lite ? 1.5 : 2);
     this.canvas.width = Math.max(1, Math.floor(rect.width * dpr));
     this.canvas.height = Math.max(1, Math.floor(rect.height * dpr));
     this.canvas.style.width = `${rect.width}px`;
     this.canvas.style.height = `${rect.height}px`;
     this.ctx?.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.initParticles();
   }
 
   private initParticles(): void {
     if (!this.canvas) return;
     const w = this.canvas.clientWidth;
     const h = this.canvas.clientHeight;
-    const count = this.reducedFlash
-      ? Math.max(18, Math.floor((w * h) / 32000))
-      : Math.max(42, Math.floor((w * h) / 14000));
+    const density = this.lite ? 48000 : (this.reducedFlash ? 32000 : 14000);
+    const minCount = this.lite ? 14 : (this.reducedFlash ? 18 : 42);
+    const count = Math.max(minCount, Math.floor((w * h) / density));
 
     this.particles = Array.from({ length: count }, () => ({
       x: Math.random() * w,
@@ -82,11 +86,6 @@ export class SelectHubBackground {
       twinkle: Math.random() * Math.PI * 2,
     }));
   }
-
-  private loop = (): void => {
-    this.raf = requestAnimationFrame(this.loop);
-    this.tick();
-  };
 
   private tick(): void {
     const ctx = this.ctx;
@@ -122,6 +121,14 @@ export class SelectHubBackground {
       const pulse = 0.55 + Math.sin(p.twinkle) * 0.45;
       const a = p.alpha * pulse * flashScale;
       const r = p.size * (0.85 + pulse * 0.25);
+
+      if (this.lite) {
+        ctx.fillStyle = `hsla(${p.hue}, 90%, 72%, ${a * 0.9})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+        ctx.fill();
+        continue;
+      }
 
       const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 3.2);
       grad.addColorStop(0, `hsla(${p.hue}, 95%, 72%, ${a})`);

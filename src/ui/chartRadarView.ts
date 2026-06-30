@@ -1,10 +1,7 @@
 import {
   analyzeChartRadar,
   CHART_RADAR_AXES,
-  CHART_STAR_MAX,
-  chartRadarRank,
-  chartRadarStars,
-  type ChartRadarRank,
+  chartDisplayLevel,
   type ChartRadarStats,
 } from '../chart/chartRadar';
 import type { ChartData } from '../types';
@@ -62,52 +59,33 @@ function dataShape(points: string, fillPaint: string): string {
   return `<polygon class="chart-radar-fill" points="${points}" ${fillPaint} />`;
 }
 
-export function renderChartStarsHtml(
-  filled: number,
-  maxStars = CHART_STAR_MAX,
+export function renderChartLevelHtml(
+  chart: ChartData | null,
   variant: 'default' | 'card' = 'default',
 ): string {
-  const stars = Math.min(maxStars, Math.max(0, filled));
-  const rowClass = variant === 'card'
-    ? 'song-chart-stars-row song-chart-stars-row--card'
-    : 'song-chart-stars-row';
-  const starSpans = Array.from({ length: maxStars }, (_, i) => {
-    const on = i < stars;
-    return `<span class="song-chart-star${on ? ' is-filled' : ''}" aria-hidden="true">${on ? '\u2605' : '\u2606'}</span>`;
-  }).join('');
-  return `<div class="${rowClass}" aria-label="${t('ui.chartStars', { count: stars, max: maxStars })}">${starSpans}</div>`;
-}
-
-export function renderChartRankHtml(rank: ChartRadarRank, variant: 'default' | 'card' = 'default'): string {
-  const key = rank.toLowerCase();
-  const cardClass = variant === 'card' ? ' song-chart-rank--card' : '';
-  return `<span class="song-chart-rank song-chart-rank--${key}${cardClass}" aria-label="${t('ui.chartRank', { rank })}">${rank}</span>`;
+  const level = chart && chart.notes.length > 0 ? chartDisplayLevel(chart) : null;
+  const label = level !== null ? t('ui.levelEn', { level }) : '—';
+  const cardClass = variant === 'card' ? ' song-chart-level--card' : '';
+  return `<span class="song-chart-level${cardClass}" aria-label="${t('ui.chartLevel', { level: level ?? 0 })}">${label}</span>`;
 }
 
 export function renderChartRatingHtml(
   chart: ChartData | null,
   variant: 'default' | 'card' = 'default',
 ): string {
-  const rank = chart && chart.notes.length > 0 ? chartRadarRank(chart) : 'D';
-  const starsHtml = renderChartStarsHtml(
-    chart && chart.notes.length > 0 ? chartRadarStars(chart) : 0,
-    CHART_STAR_MAX,
-    variant,
-  );
+  const levelHtml = renderChartLevelHtml(chart, variant);
 
   if (variant === 'card') {
     return `
       <div class="song-chart-rating song-chart-rating--card">
-        ${renderChartRankHtml(rank, 'card')}
-        <div class="song-chart-stars">${starsHtml}</div>
+        ${levelHtml}
       </div>
     `;
   }
 
   return `
     <div class="song-chart-rating" id="song-chart-rating">
-      ${renderChartRankHtml(rank)}
-      <div class="song-chart-stars">${starsHtml}</div>
+      ${levelHtml}
     </div>
   `;
 }

@@ -21,6 +21,11 @@ export interface CustomTrackEntry {
   file: File;
 }
 
+export interface CustomTrackSortMeta {
+  bpm: number | null;
+  duration: number | null;
+}
+
 export class CustomSongLoader {
   private buffer: AudioBuffer | null = null;
   private fileName = '';
@@ -31,6 +36,7 @@ export class CustomSongLoader {
   private selectedIndex = 0;
   private folderLabel = '';
   private bufferCache = new Map<string, AudioBuffer>();
+  private trackMetaCache = new Map<string, { bpm: number; duration: number }>();
 
   constructor(private audio: AudioEngine) {}
 
@@ -67,6 +73,12 @@ export class CustomSongLoader {
     return this.folderLabel;
   }
 
+  getTrackSortMeta(file: File): CustomTrackSortMeta {
+    const meta = this.trackMetaCache.get(this.trackCacheKey(file));
+    if (!meta) return { bpm: null, duration: null };
+    return meta;
+  }
+
   setCatalogFromFiles(files: File[], folderLabel = ''): CustomTrackEntry[] {
     this.importMode = 'folder';
     this.folderLabel = folderLabel;
@@ -79,6 +91,7 @@ export class CustomSongLoader {
     this.buffer = null;
     this.fileName = '';
     this.bufferCache.clear();
+    this.trackMetaCache.clear();
     return this.catalog;
   }
 
@@ -87,6 +100,7 @@ export class CustomSongLoader {
     this.catalog = [];
     this.selectedIndex = 0;
     this.bufferCache.clear();
+    this.trackMetaCache.clear();
     return this.decodeFile(file);
   }
 
@@ -113,6 +127,11 @@ export class CustomSongLoader {
 
     this.buffer = buffer;
     this.fileName = titleFromFileName(file.name);
+    const suggestedBpm = estimateBpm(buffer);
+    this.trackMetaCache.set(cacheKey, {
+      bpm: suggestedBpm,
+      duration: buffer.duration,
+    });
 
     const analysis = analyzeGenre(buffer);
     this.genre = analysis.genre;
@@ -123,7 +142,7 @@ export class CustomSongLoader {
     return {
       title: this.fileName,
       duration: buffer.duration,
-      suggestedBpm: estimateBpm(buffer),
+      suggestedBpm,
       genre: this.genre,
       genreLabel: getGenreLabel(this.genre),
       genreConfidence: this.genreConfidence,
@@ -154,6 +173,7 @@ export class CustomSongLoader {
     this.selectedIndex = 0;
     this.folderLabel = '';
     this.bufferCache.clear();
+    this.trackMetaCache.clear();
     this.audio.clearUserBuffer();
   }
 }

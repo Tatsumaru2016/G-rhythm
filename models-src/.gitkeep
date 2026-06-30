@@ -1,0 +1,2 @@
+# 未圧縮 GLB をここに置くと dev/build 時に自動で
+# public/models/ へ Draco + KTX2(ETC1S) 圧縮されます。

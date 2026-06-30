@@ -9,12 +9,13 @@ import type { MusicGenre } from '../types';
 import {
   isValidStageFxPattern,
   pickSidePatterns,
-  pickSplitRefresh,
   STAGE_FX_PATTERN_COUNT,
   type SideFxPairing,
 } from './stageFxPatterns';
 import {
   getPhaseColorScheme,
+  getPhasePatternWeightBias,
+  PHASE_SIDE_FX_DRIVE,
   type PhaseColorScheme,
   type SongPhase,
 } from './scrollPhase';
@@ -168,14 +169,13 @@ export class SideStageFX {
   }
 
   private assignPatterns(phase?: SongPhase): void {
-    const weights = this.patternWeights.length > 0
+    const base = this.patternWeights.length > 0
       ? this.patternWeights
       : getGenreVisualProfile(this.genre).patternWeights;
 
-    if (phase && this.pairing === 'split' && this.debugPattern === null && this.lastSongPhase !== null) {
-      this.rightPattern = pickSplitRefresh(weights, this.leftPattern);
-      return;
-    }
+    const weights = phase
+      ? base.map((w, i) => w * (getPhasePatternWeightBias(phase)[i] ?? 1))
+      : base;
 
     const pick = pickSidePatterns(weights, this.debugPattern);
     this.leftPattern = pick.left;
@@ -203,7 +203,7 @@ export class SideStageFX {
     this.genre = resolveGenre(chart);
     this.patternWeights = [...getGenreVisualProfile(this.genre).patternWeights];
     this.lastSongPhase = null;
-    this.assignPatterns();
+    this.assignPatterns('early');
     this.hitBoost = 0;
     this.perfectBoost = 0;
     this.hue = Math.random() * 360;
@@ -490,15 +490,20 @@ export class SideStageFX {
   ) {
     this.lastBounds = bounds;
 
-    if (this.debugPattern === null && this.lastSongPhase !== null && phase !== this.lastSongPhase) {
+    if (this.debugPattern === null && phase !== this.lastSongPhase) {
       this.assignPatterns(phase);
+      if (this.lastSongPhase !== null && !this.reducedFlash) {
+        this.hitBoost = Math.max(this.hitBoost, phase === 'late' ? 0.55 : 0.38);
+      }
     }
     this.lastSongPhase = phase;
 
     const palette = blendPhaseWithGenre(getPhaseColorScheme(phase), this.genre);
     const drawSync = this.dampenSync(sync);
     const genreVisual = getGenreVisualProfile(this.genre);
-    const bright = this.brightness() * (this.reducedFlash ? 1 : genreVisual.driveScale);
+    const bright = this.brightness()
+      * (this.reducedFlash ? 1 : genreVisual.driveScale)
+      * PHASE_SIDE_FX_DRIVE[phase];
     const panels = this.sidePanels(screenW, screenH, bounds);
 
     ctx.save();

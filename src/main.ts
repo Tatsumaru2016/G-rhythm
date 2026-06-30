@@ -1,10 +1,15 @@
 import './styles.css';
 import { initLocale } from './i18n';
 import { AudioEngine } from './audio/AudioEngine';
+import { allGameplayCheerUrls } from './audio/gameplayCheers';
+import { songFinishCheerUrl } from './audio/songFinishCheer';
+import { randomPickSoundUrls } from './audio/randomPickSounds';
+import { resultAnnounceUrl, resultVoiceUrl } from './audio/resultVoice';
 import { BuiltinSongAudio } from './audio/BuiltinSongAudio';
 import { CustomSongLoader } from './audio/CustomSongLoader';
 import { Game } from './game/Game';
 import { UIManager } from './ui/UIManager';
+import { shouldPreloadAllDancersAtStartup } from './perf/webPerf';
 import type { ChartData, GameStats } from './types';
 
 async function main() {
@@ -52,7 +57,9 @@ async function main() {
       touchZones = ui.showTouchZones(() => game.getTouchZoneLayout());
       ui.showPlayHud();
       game.bindTouchZones(touchZones);
-      game.start(playChart);
+      game.start(playChart, {
+        countdownSeconds: ui.consumeSkipGameCountdown() ? 0 : undefined,
+      });
     },
     () => endGameplay(),
     () => {
@@ -84,17 +91,51 @@ async function main() {
   ui.showTitle();
   void ui.tryRestoreLastCustomFolder();
   void (async () => {
+    const pickUrls = randomPickSoundUrls(import.meta.env.BASE_URL);
+    const pickSoundsLoad = audio.loadRandomPickSounds(pickUrls);
+    const songFinishCheerLoad = audio.loadSongFinishCheer(songFinishCheerUrl(import.meta.env.BASE_URL));
     try {
-      await builtinAudio.preloadAll(audio);
-      await audio.loadTitleBgm(`${import.meta.env.BASE_URL}audio/title_bgm.ogg`);
+      await Promise.all([pickSoundsLoad, songFinishCheerLoad]);
+      await Promise.all([
+        builtinAudio.preloadAll(audio),
+        audio.loadTitleBgm(`${import.meta.env.BASE_URL}audio/title_bgm.ogg`),
+        audio.loadStartSound(`${import.meta.env.BASE_URL}audio/start.wav`),
+        audio.loadCountdownSound(`${import.meta.env.BASE_URL}audio/countdown_tick.wav`),
+        audio.loadResultAnnounce(resultAnnounceUrl(import.meta.env.BASE_URL)),
+        audio.loadResultVoices((id) => resultVoiceUrl(id, import.meta.env.BASE_URL)),
+        audio.loadGameplayCheers(allGameplayCheerUrls(import.meta.env.BASE_URL)),
+      ]);
       await ui.syncTitleBgm();
     } catch (err) {
       console.error(err);
     }
   })();
-  void game.preloadDancerModels((loaded, total) => {
+
+  const DANCER_TOTAL = 28;
+  const onDancerLoadProgress = (loaded: number, total: number) => {
     ui.updateBackgroundLoadProgress(loaded, total);
-  });
+  };
+
+  const scheduleRemainingDancerPreload = () => {
+    const run = () => {
+      void game.preloadRemainingDancerModels((loaded, total) => {
+        ui.updateBackgroundLoadProgress(8 + loaded, DANCER_TOTAL);
+      });
+    };
+    if ('requestIdleCallback' in window) {
+      window.requestIdleCallback(run, { timeout: 5000 });
+    } else {
+      window.setTimeout(run, 1500);
+    }
+  };
+
+  if (shouldPreloadAllDancersAtStartup()) {
+    void game.preloadDancerModels(onDancerLoadProgress);
+  } else {
+    void game.preloadEarlyDancers()
+      .then(() => ui.updateBackgroundLoadProgress(8, DANCER_TOTAL))
+      .then(scheduleRemainingDancerPreload);
+  }
 
   document.addEventListener('visibilitychange', () => {
     if (document.hidden && game.getPhase() === 'playing') {

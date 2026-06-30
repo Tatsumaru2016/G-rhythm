@@ -1,3 +1,4 @@
+import type { ResultVoiceId } from './resultVoice';
 import type { ChartData, LaneIndex, JudgmentType } from '../types';
 
 /** レーン別ベース周波数（サイバー系デジタル音階） */
@@ -48,6 +49,21 @@ export class AudioEngine {
   private titleBgmBuffer: AudioBuffer | null = null;
   private titleBgmSource: AudioBufferSourceNode | null = null;
   private titleBgmGain: GainNode | null = null;
+  private startSoundBuffer: AudioBuffer | null = null;
+  private countdownTickBuffer: AudioBuffer | null = null;
+  private resultAnnounceBuffer: AudioBuffer | null = null;
+  private resultVoiceBuffers = new Map<ResultVoiceId, AudioBuffer>();
+  private gameplayCheerBuffers: AudioBuffer[] = [];
+  private activeGameplayCheer: AudioBufferSourceNode | null = null;
+  private randomPickRouletteBuffer: AudioBuffer | null = null;
+  private randomPickDecideBuffer: AudioBuffer | null = null;
+  private randomPickPanelLandBuffer: AudioBuffer | null = null;
+  private activeRandomPickRoulette: AudioBufferSourceNode | null = null;
+  private randomPickSoundUrls: { roulette: string; decide: string; panelLand: string } | null = null;
+  private randomPickLoadPromise: Promise<void> | null = null;
+  private songFinishCheerBuffer: AudioBuffer | null = null;
+  private songFinishCheerUrl: string | null = null;
+  private songFinishCheerLoadPromise: Promise<void> | null = null;
 
   async decodeArrayBuffer(arrayBuffer: ArrayBuffer): Promise<AudioBuffer> {
     await this.init();
@@ -81,6 +97,181 @@ export class AudioEngine {
 
   async loadTitleBgm(url: string): Promise<void> {
     this.titleBgmBuffer = await this.loadTrackFromUrl(url);
+  }
+
+  async loadStartSound(url: string): Promise<void> {
+    this.startSoundBuffer = await this.loadTrackFromUrl(url);
+  }
+
+  async loadCountdownSound(url: string): Promise<void> {
+    try {
+      this.countdownTickBuffer = await this.loadTrackFromUrl(url);
+    } catch (err) {
+      console.warn('[AudioEngine] countdown sound load failed', err);
+    }
+  }
+
+  async loadResultVoices(loadUrl: (id: ResultVoiceId) => string): Promise<void> {
+    const ids: ResultVoiceId[] = ['marvelous', 'excellent', 'good', 'close'];
+    await Promise.all(ids.map(async (id) => {
+      try {
+        const buffer = await this.loadTrackFromUrl(loadUrl(id));
+        this.resultVoiceBuffers.set(id, buffer);
+      } catch (err) {
+        console.warn(`[AudioEngine] result voice load failed: ${id}`, err);
+      }
+    }));
+  }
+
+  async loadResultAnnounce(url: string): Promise<void> {
+    try {
+      this.resultAnnounceBuffer = await this.loadTrackFromUrl(url);
+    } catch (err) {
+      console.warn('[AudioEngine] result announce load failed', err);
+    }
+  }
+
+  async loadGameplayCheers(urls: string[]): Promise<void> {
+    this.gameplayCheerBuffers = [];
+    await Promise.all(urls.map(async (url) => {
+      try {
+        const buffer = await this.loadTrackFromUrl(url);
+        this.gameplayCheerBuffers.push(buffer);
+      } catch (err) {
+        console.warn(`[AudioEngine] gameplay cheer load failed: ${url}`, err);
+      }
+    }));
+  }
+
+  async loadRandomPickSounds(urls: { roulette: string; decide: string; panelLand: string }): Promise<void> {
+    this.randomPickSoundUrls = urls;
+    const entries: [keyof typeof urls, string][] = [
+      ['roulette', urls.roulette],
+      ['decide', urls.decide],
+      ['panelLand', urls.panelLand],
+    ];
+    await Promise.all(entries.map(async ([key, url]) => {
+      if (
+        (key === 'roulette' && this.randomPickRouletteBuffer)
+        || (key === 'decide' && this.randomPickDecideBuffer)
+        || (key === 'panelLand' && this.randomPickPanelLandBuffer)
+      ) {
+        return;
+      }
+      try {
+        const buffer = await this.loadTrackFromUrl(url);
+        if (key === 'roulette') this.randomPickRouletteBuffer = buffer;
+        else if (key === 'decide') this.randomPickDecideBuffer = buffer;
+        else this.randomPickPanelLandBuffer = buffer;
+      } catch (err) {
+        console.warn(`[AudioEngine] random pick sound load failed: ${key}`, url, err);
+      }
+    }));
+  }
+
+  async ensureRandomPickSoundsLoaded(): Promise<void> {
+    if (!this.randomPickSoundUrls) return;
+    if (
+      this.randomPickRouletteBuffer
+      && this.randomPickDecideBuffer
+      && this.randomPickPanelLandBuffer
+    ) {
+      return;
+    }
+    if (!this.randomPickLoadPromise) {
+      this.randomPickLoadPromise = this.loadRandomPickSounds(this.randomPickSoundUrls).finally(() => {
+        this.randomPickLoadPromise = null;
+      });
+    }
+    await this.randomPickLoadPromise;
+  }
+
+  hasRandomPickSounds(): boolean {
+    return Boolean(
+      this.randomPickRouletteBuffer
+      && this.randomPickDecideBuffer
+      && this.randomPickPanelLandBuffer,
+    );
+  }
+
+  async loadSongFinishCheer(url: string): Promise<void> {
+    this.songFinishCheerUrl = url;
+    if (this.songFinishCheerBuffer) return;
+    try {
+      this.songFinishCheerBuffer = await this.loadTrackFromUrl(url);
+    } catch (err) {
+      console.warn('[AudioEngine] song finish cheer load failed', url, err);
+    }
+  }
+
+  async ensureSongFinishCheerLoaded(): Promise<void> {
+    if (this.songFinishCheerBuffer || !this.songFinishCheerUrl) return;
+    if (!this.songFinishCheerLoadPromise) {
+      this.songFinishCheerLoadPromise = this.loadSongFinishCheer(this.songFinishCheerUrl).finally(() => {
+        this.songFinishCheerLoadPromise = null;
+      });
+    }
+    await this.songFinishCheerLoadPromise;
+  }
+
+  playSongFinishCheer(): void {
+    if (!this.ctx || !this.sfxGain || !this.songFinishCheerBuffer) return;
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.songFinishCheerBuffer;
+    const gain = this.ctx.createGain();
+    gain.gain.value = 0.92;
+    src.connect(gain);
+    gain.connect(this.sfxGain);
+    src.start(0);
+  }
+
+  stopRandomPickRoulette(): void {
+    if (!this.activeRandomPickRoulette) return;
+    try { this.activeRandomPickRoulette.stop(); } catch { /* already stopped */ }
+    this.activeRandomPickRoulette = null;
+  }
+
+  playRandomPickRoulette(): void {
+    if (!this.ctx || !this.sfxGain) return;
+    this.stopRandomPickRoulette();
+    if (!this.randomPickRouletteBuffer) {
+      console.warn('[AudioEngine] random pick roulette buffer not loaded');
+      return;
+    }
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.randomPickRouletteBuffer;
+    const gain = this.ctx.createGain();
+    gain.gain.value = 1;
+    src.connect(gain);
+    gain.connect(this.sfxGain);
+    src.onended = () => {
+      if (this.activeRandomPickRoulette === src) this.activeRandomPickRoulette = null;
+    };
+    src.start(0);
+    this.activeRandomPickRoulette = src;
+  }
+
+  playRandomPickSongDecided(): void {
+    this.playRandomPickOneShot(this.randomPickDecideBuffer, 1);
+  }
+
+  playRandomPickPanelLand(): void {
+    this.playRandomPickOneShot(this.randomPickPanelLandBuffer, 1);
+  }
+
+  private playRandomPickOneShot(buffer: AudioBuffer | null, volume: number): void {
+    if (!this.ctx || !this.sfxGain) return;
+    if (!buffer) {
+      console.warn('[AudioEngine] random pick one-shot buffer not loaded');
+      return;
+    }
+    const src = this.ctx.createBufferSource();
+    src.buffer = buffer;
+    const gain = this.ctx.createGain();
+    gain.gain.value = volume;
+    src.connect(gain);
+    gain.connect(this.sfxGain);
+    src.start(0);
   }
 
   isTitleBgmPlaying(): boolean {
@@ -437,6 +628,7 @@ export class AudioEngine {
   stop(): void {
     this.stopTitleBgm();
     this.stopUserPreview();
+    this.stopGameplayCheer();
     for (const node of this.scheduledNodes) {
       try { node.stop(); } catch { /* already stopped */ }
     }
@@ -784,8 +976,52 @@ export class AudioEngine {
     this.cyberGlitch(t + 0.02, 0.04, 0.035, 1200, 7000);
   }
 
-  /** カウントダウン 3・2・1 */
+  /** カウントダウン 3・2・1（およびお任せの 5〜1） */
   playCountdownTick(num: number): void {
+    if (!this.ctx || !this.sfxGain) return;
+    if (this.countdownTickBuffer) {
+      this.playCountdownBeep();
+      return;
+    }
+    this.playCountdownTickSynth(num);
+  }
+
+  /** カウントダウン GO（UI表示用） */
+  playCountdownStart(): void {
+    if (!this.ctx || !this.sfxGain) return;
+    if (this.countdownTickBuffer) {
+      this.playCountdownBeep();
+      return;
+    }
+    this.playCountdownStartSynth();
+  }
+
+  private playCountdownBeep(volume = 0.88, playbackRate = 1): void {
+    if (!this.ctx || !this.sfxGain || !this.countdownTickBuffer) return;
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.countdownTickBuffer;
+    src.playbackRate.value = playbackRate;
+    const gain = this.ctx.createGain();
+    gain.gain.value = volume;
+    src.connect(gain);
+    gain.connect(this.sfxGain);
+    src.start();
+  }
+
+  /** お任せルーレットのリスト移動（progress 0〜1 で高くなる） */
+  playRandomPickRouletteTick(progress: number): void {
+    if (!this.ctx || !this.sfxGain) return;
+    const p = Math.min(1, Math.max(0, progress));
+    if (this.countdownTickBuffer) {
+      this.playCountdownBeep(0.4 + p * 0.24, 0.86 + p * 0.32);
+      return;
+    }
+    const t = this.ctx.currentTime;
+    const freq = 360 + p * 340;
+    this.cyberBlip(t, freq, 0.038 + p * 0.022, 0.042, 'square', freq * 1.28, 2200 + p * 900);
+  }
+
+  private playCountdownTickSynth(num: number): void {
     if (!this.ctx || !this.sfxGain) return;
     const t = this.ctx.currentTime;
     const freqs: Record<number, number> = { 3: 370, 2: 494, 1: 622 };
@@ -795,8 +1031,82 @@ export class AudioEngine {
     this.cyberGlitch(t, 0.02, vol * 0.35, 1800 + num * 200, 5500 + num * 400);
   }
 
-  /** カウントダウン GO / スタート */
-  playCountdownStart(): void {
+  /** カウントダウン終了後のプレイ開始 */
+  playGameStartSound(): void {
+    if (!this.ctx || !this.sfxGain) return;
+    if (this.startSoundBuffer) {
+      const src = this.ctx.createBufferSource();
+      src.buffer = this.startSoundBuffer;
+      const gain = this.ctx.createGain();
+      gain.gain.value = 0.92;
+      src.connect(gain);
+      gain.connect(this.sfxGain);
+      src.start();
+      return;
+    }
+    this.playCountdownStartSynth();
+  }
+
+  /** Perfect / Great 時の歓声（6種からランダム） */
+  playRandomGameplayCheer(): void {
+    if (!this.ctx || !this.sfxGain || this.gameplayCheerBuffers.length === 0) return;
+    if (this.activeGameplayCheer) return;
+
+    const buffer = this.gameplayCheerBuffers[
+      Math.floor(Math.random() * this.gameplayCheerBuffers.length)
+    ];
+    const src = this.ctx.createBufferSource();
+    src.buffer = buffer;
+    const gain = this.ctx.createGain();
+    gain.gain.value = 0.72;
+    src.connect(gain);
+    gain.connect(this.sfxGain);
+    src.onended = () => {
+      if (this.activeGameplayCheer === src) this.activeGameplayCheer = null;
+    };
+    this.activeGameplayCheer = src;
+    src.start();
+  }
+
+  private stopGameplayCheer(): void {
+    if (!this.activeGameplayCheer) return;
+    try { this.activeGameplayCheer.stop(); } catch { /* already stopped */ }
+    this.activeGameplayCheer = null;
+  }
+
+  /** リザルト前のアナウンス「注目の結果は？」 */
+  async playResultAnnounce(): Promise<void> {
+    if (!this.resultAnnounceBuffer) return;
+    await this.resume();
+    await this.playSfxBuffer(this.resultAnnounceBuffer);
+  }
+
+  /** リザルト画面のグレード別ボイス */
+  async playResultVoice(id: ResultVoiceId): Promise<void> {
+    const buffer = this.resultVoiceBuffers.get(id);
+    if (!buffer) return;
+    await this.resume();
+    await this.playSfxBuffer(buffer);
+  }
+
+  private playSfxBuffer(buffer: AudioBuffer, volume = 0.92): Promise<void> {
+    return new Promise((resolve) => {
+      if (!this.ctx || !this.sfxGain) {
+        resolve();
+        return;
+      }
+      const src = this.ctx.createBufferSource();
+      src.buffer = buffer;
+      const gain = this.ctx.createGain();
+      gain.gain.value = volume;
+      src.connect(gain);
+      gain.connect(this.sfxGain);
+      src.onended = () => resolve();
+      src.start();
+    });
+  }
+
+  private playCountdownStartSynth(): void {
     if (!this.ctx || !this.sfxGain) return;
     const t = this.ctx.currentTime;
     this.cyberFmBlip(t, 622, 1244, 130, 0.085, 0.1, 988);
