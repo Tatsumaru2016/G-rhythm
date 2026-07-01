@@ -1,6 +1,7 @@
 import type { LaneIndex } from '../types';
 import { LANE_COLORS } from '../types';
 import type { MessageKey } from '../i18n/messages';
+import { loadCustomLaneBackgroundDataUrl } from '../settings/customLaneBackgroundImage';
 
 /** 4レーン合計の最大幅（Renderer.LANE_AREA_MAX_PX と同期） */
 export const LANE_PLAYFIELD_MAX_WIDTH_PX = 392;
@@ -24,6 +25,7 @@ export const LANE_BACKGROUND_IDS = [
   'deepCosmos',
   'acidWave',
   'prismScan',
+  'custom',
 ] as const;
 
 export type LaneBackgroundId = (typeof LANE_BACKGROUND_IDS)[number];
@@ -57,9 +59,11 @@ export function getLanePlayfieldHeight(layout: LaneBackgroundLayout): number {
 }
 
 /** 現在のレイアウトに基づく実ピクセルサイズ（参考値） */
-export function getLaneBackgroundPixelSize(
-  layout: LaneBackgroundLayout,
-): { stripWidth: number; stripHeight: number; laneWidth: number } {
+export function getLaneBackgroundPixelSize(layout: LaneBackgroundLayout): {
+  stripWidth: number;
+  stripHeight: number;
+  laneWidth: number;
+} {
   return {
     stripWidth: layout.laneWidth * 4,
     stripHeight: getLanePlayfieldHeight(layout),
@@ -186,7 +190,10 @@ function drawDeepCosmosLane(
   const [r, g, b] = laneColorRgb(lane);
   const nebula = ctx.createLinearGradient(left, top, left, top + h);
   nebula.addColorStop(0, `rgba(8, 4, 28, 0.92)`);
-  nebula.addColorStop(0.5, `rgba(${Math.floor(r * 0.15)}, ${Math.floor(g * 0.12)}, ${Math.floor(b * 0.2)}, 0.75)`);
+  nebula.addColorStop(
+    0.5,
+    `rgba(${Math.floor(r * 0.15)}, ${Math.floor(g * 0.12)}, ${Math.floor(b * 0.2)}, 0.75)`,
+  );
   nebula.addColorStop(1, `rgba(4, 0, 18, 0.95)`);
   ctx.fillStyle = nebula;
   ctx.fillRect(left, top, w, h);
@@ -203,7 +210,7 @@ function drawDeepCosmosLane(
   const starCount = 6;
   for (let s = 0; s < starCount; s++) {
     const seed = lane * 17 + s * 31;
-    const sx = left + ((seed * 13) % 97) / 100 * w;
+    const sx = left + (((seed * 13) % 97) / 100) * w;
     const sy = top + (((seed * 29 + time * 12) % 100) / 100) * h;
     const twinkle = 0.35 + 0.65 * Math.sin(time * 4 + seed);
     ctx.fillStyle = `rgba(255,255,255,${twinkle * 0.55 * intensity})`;
@@ -221,7 +228,7 @@ function drawAcidWaveLane(
   time: number,
   intensity: number,
 ): void {
-  const [r, g, b] = laneColorRgb(lane);
+  const [r, g, blue] = laneColorRgb(lane);
   ctx.fillStyle = 'rgba(0,0,0,0.45)';
   ctx.fillRect(left, top, w, h);
 
@@ -234,9 +241,7 @@ function drawAcidWaveLane(
     const hue = (lane * 70 + b * 28 + time * 45) % 360;
     const alpha = (0.1 + (0.5 + 0.5 * wave) * 0.14) * intensity;
     ctx.fillStyle =
-      b % 2 === 0
-        ? hsla(hue, 90, 55, alpha)
-        : `rgba(${r}, ${g}, ${b}, ${alpha * 0.85})`;
+      b % 2 === 0 ? hsla(hue, 90, 55, alpha) : `rgba(${r}, ${g}, ${blue}, ${alpha * 0.85})`;
     ctx.fillRect(left + offset, y, w, bandH * 1.15);
   }
 }
@@ -276,8 +281,91 @@ function drawPrismScanLane(
   }
 }
 
+let customLaneImage: HTMLImageElement | null = null;
+let customLaneImageSrc: string | null = null;
+
+export function preloadCustomLaneBackgroundImage(dataUrl?: string | null): void {
+  const src = dataUrl === undefined ? loadCustomLaneBackgroundDataUrl() : dataUrl;
+  if (!src) {
+    customLaneImage = null;
+    customLaneImageSrc = null;
+    return;
+  }
+  if (src === customLaneImageSrc && customLaneImage?.complete) return;
+
+  customLaneImageSrc = src;
+  customLaneImage = null;
+  const img = new Image();
+  img.onload = () => {
+    if (customLaneImageSrc === src) customLaneImage = img;
+  };
+  img.onerror = () => {
+    if (customLaneImageSrc === src) {
+      customLaneImage = null;
+      customLaneImageSrc = null;
+    }
+  };
+  img.src = src;
+}
+
+function drawCustomImagePlayfield(
+  ctx: CanvasRenderingContext2D,
+  left: number,
+  top: number,
+  totalW: number,
+  h: number,
+): boolean {
+  if (!customLaneImage?.complete || customLaneImage.naturalWidth <= 0) return false;
+
+  const img = customLaneImage;
+  const imgW = img.naturalWidth;
+  const imgH = img.naturalHeight;
+  const perLane = imgW <= imgH * 0.35;
+  const drawW = perLane ? totalW / 4 : totalW;
+  const scale = drawW / imgW;
+  const tileH = Math.max(1, imgH * scale);
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(left, top, totalW, h);
+  ctx.clip();
+
+  if (perLane) {
+    for (let lane = 0; lane < 4; lane++) {
+      const laneLeft = left + lane * (totalW / 4);
+      for (let y = top; y < top + h; y += tileH) {
+        ctx.drawImage(img, laneLeft, y, drawW, tileH);
+      }
+    }
+  } else {
+    for (let y = top; y < top + h; y += tileH) {
+      ctx.drawImage(img, left, y, totalW, tileH);
+    }
+  }
+
+  ctx.fillStyle = 'rgba(0,0,0,0.22)';
+  ctx.fillRect(left, top, totalW, h);
+  ctx.restore();
+  return true;
+}
+
+function drawCustomLane(
+  ctx: CanvasRenderingContext2D,
+  left: number,
+  top: number,
+  w: number,
+  h: number,
+  lane: LaneIndex,
+  layoutStartX: number,
+  totalW: number,
+): void {
+  if (lane !== 0) return;
+  if (drawCustomImagePlayfield(ctx, layoutStartX, top, totalW, h)) return;
+  drawClassicLane(ctx, left, top, w, h, lane);
+}
+
 const LANE_DRAWERS: Record<
-  LaneBackgroundId,
+  Exclude<LaneBackgroundId, 'custom'>,
   (
     ctx: CanvasRenderingContext2D,
     left: number,
@@ -307,16 +395,33 @@ export function drawLaneBackground(
   if (h <= 0) return;
 
   const intensity = reducedFlash ? 0.45 : 1;
-  const drawer = LANE_DRAWERS[id];
+  const totalW = layout.laneWidth * 4;
 
   ctx.save();
   ctx.beginPath();
-  ctx.rect(layout.laneStartX, top, layout.laneWidth * 4, h);
+  ctx.rect(layout.laneStartX, top, totalW, h);
   ctx.clip();
 
-  for (let lane = 0; lane < 4; lane++) {
-    const left = layout.laneStartX + lane * layout.laneWidth;
-    drawer(ctx, left, top, layout.laneWidth, h, lane as LaneIndex, time, intensity);
+  if (id === 'custom') {
+    for (let lane = 0; lane < 4; lane++) {
+      const left = layout.laneStartX + lane * layout.laneWidth;
+      drawCustomLane(
+        ctx,
+        left,
+        top,
+        layout.laneWidth,
+        h,
+        lane as LaneIndex,
+        layout.laneStartX,
+        totalW,
+      );
+    }
+  } else {
+    const drawer = LANE_DRAWERS[id];
+    for (let lane = 0; lane < 4; lane++) {
+      const left = layout.laneStartX + lane * layout.laneWidth;
+      drawer(ctx, left, top, layout.laneWidth, h, lane as LaneIndex, time, intensity);
+    }
   }
 
   ctx.restore();

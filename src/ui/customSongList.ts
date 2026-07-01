@@ -13,6 +13,7 @@ export function renderFolderSongList(
   formatMeta: (track: CustomTrackEntry) => string = () => '\u2014',
   getBestGrade: (track: CustomTrackEntry) => DdrGrade | null = () => null,
   getChart: (track: CustomTrackEntry, catalogIndex: number) => ChartData | null = () => null,
+  getDisplayLevel: (track: CustomTrackEntry, catalogIndex: number) => number | null = () => null,
 ): string {
   const pad = String(rows.length).length;
   return rows
@@ -22,7 +23,11 @@ export function renderFolderSongList(
       const num = String(displayIndex + 1).padStart(pad, '0');
       const meta = formatMeta(row.track);
       const chart = getChart(row.track, row.catalogIndex);
-      const levelHtml = renderChartLevelHtml(chart, 'card');
+      const levelHtml = renderChartLevelHtml(
+        chart,
+        'card',
+        getDisplayLevel(row.track, row.catalogIndex),
+      );
       const rankHtml = renderBestGradeBadgeHtml(getBestGrade(row.track), 'card');
       return `
       <button

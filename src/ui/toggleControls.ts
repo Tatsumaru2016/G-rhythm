@@ -56,11 +56,11 @@ export function renderFlashToggleStateHtml(): string {
       <span class="hub-toggle__state" title="${t('settings.reducedFlash')}">
         <span class="hub-toggle__icon hub-toggle__icon--on">
           <span class="title-flash-icon-wrap" aria-hidden="true">${icon}</span>
-          <span class="hub-toggle__label">${t('ui.titleSoundOn')}</span>
+          <span class="hub-toggle__label">${t('ui.titleFlashReduceOn')}</span>
         </span>
         <span class="hub-toggle__icon hub-toggle__icon--off">
           <span class="title-flash-icon-wrap" aria-hidden="true">${icon}</span>
-          <span class="hub-toggle__label">${t('ui.titleSoundOff')}</span>
+          <span class="hub-toggle__label">${t('ui.titleFlashReduceOff')}</span>
         </span>
       </span>
     `;

@@ -74,8 +74,10 @@ function dataShape(points: string, fillPaint: string): string {
 export function renderChartLevelHtml(
   chart: ChartData | null,
   variant: 'default' | 'card' | 'hero' | 'panel' = 'default',
+  levelOverride?: number | null,
 ): string {
-  const level = chart && chart.notes.length > 0 ? chartDisplayLevel(chart) : null;
+  const level =
+    levelOverride ?? (chart && chart.notes.length > 0 ? chartDisplayLevel(chart) : null);
   const num = level !== null ? String(level) : '—';
   const aria = t('ui.chartLevel', { level: level ?? 0 });
 

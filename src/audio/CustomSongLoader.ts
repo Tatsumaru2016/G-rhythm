@@ -3,6 +3,13 @@ import { analyzeGenre, getGenreLabel } from './musicGenre';
 import { generateChart, estimateBpm, type CustomDifficulty } from './AutoChartGenerator';
 import { titleFromFileName } from './customAudioExtensions';
 import { fileSongRecordKey } from '../data/songRecordKey';
+import {
+  getPersistedTrackMeta,
+  prunePersistedTrackMeta,
+  savePersistedTrackLevel,
+  savePersistedTrackMeta,
+} from '../data/trackMetaCache';
+import { chartDisplayLevel } from '../chart/chartRadar';
 import type { ChartData, MusicGenre } from '../types';
 
 export type CustomImportMode = 'single' | 'folder';
@@ -107,6 +114,25 @@ export class CustomSongLoader {
     return { bpm: meta.bpm, duration: meta.duration };
   }
 
+  getPersistedDisplayLevel(file: File, difficulty: CustomDifficulty): number | null {
+    const level = getPersistedTrackMeta(fileSongRecordKey(file))?.levels?.[difficulty];
+    return typeof level === 'number' && level > 0 ? level : null;
+  }
+
+  /** Decode + build chart preview when meta is cached but audio is not. */
+  async ensureChartPreviewForFile(
+    file: File,
+    difficulty: CustomDifficulty,
+    bpm?: number,
+    offset = 0,
+  ): Promise<ChartData | null> {
+    const cached = this.buildChartPreviewForFile(file, difficulty, bpm, offset);
+    if (cached) return cached;
+    await this.ensureTrackDecoded(file);
+    await this.ensureTrackAnalysis(file);
+    return this.buildChartPreviewForFile(file, difficulty, bpm, offset);
+  }
+
   setCatalogFromFiles(files: File[], folderLabel = ''): CustomTrackEntry[] {
     this.importMode = 'folder';
     this.folderLabel = folderLabel;
@@ -122,7 +148,22 @@ export class CustomSongLoader {
     this.trackAnalysisCache.clear();
     this.inflightAnalysis.clear();
     this.chartPreviewCache.clear();
+    this.hydratePersistedTrackMeta();
     return this.catalog;
+  }
+
+  private hydratePersistedTrackMeta(): void {
+    const validKeys = new Set<string>();
+    for (const entry of this.catalog) {
+      const recordKey = fileSongRecordKey(entry.file);
+      validKeys.add(recordKey);
+      const persisted = getPersistedTrackMeta(recordKey);
+      if (!persisted) continue;
+      this.trackAnalysisCache.set(this.trackCacheKey(entry.file), persisted);
+    }
+    if (this.catalog.length > 0) {
+      prunePersistedTrackMeta(validKeys);
+    }
   }
 
   async loadFile(file: File): Promise<CustomSongMeta> {
@@ -134,6 +175,10 @@ export class CustomSongLoader {
     this.trackAnalysisCache.clear();
     this.inflightAnalysis.clear();
     this.chartPreviewCache.clear();
+    const persisted = getPersistedTrackMeta(fileSongRecordKey(file));
+    if (persisted) {
+      this.trackAnalysisCache.set(this.trackCacheKey(file), persisted);
+    }
     return this.decodeFile(file);
   }
 
@@ -195,6 +240,7 @@ export class CustomSongLoader {
       genreConfidence: analysis.confidence,
     };
     this.trackAnalysisCache.set(cacheKey, meta);
+    savePersistedTrackMeta(fileSongRecordKey(file), meta);
     return meta;
   }
 
@@ -226,6 +272,7 @@ export class CustomSongLoader {
     chart.genreConfidence = this.genreConfidence;
     const recordKey = this.getActiveRecordKey();
     if (recordKey) chart.songRecordKey = recordKey;
+    this.persistDisplayLevel(difficulty, chart);
     return chart;
   }
 
@@ -257,7 +304,15 @@ export class CustomSongLoader {
     chart.genreConfidence = analysis.genreConfidence;
     chart.songRecordKey = fileSongRecordKey(file);
     this.chartPreviewCache.set(previewKey, chart);
+    this.persistDisplayLevel(difficulty, chart, file);
     return chart;
+  }
+
+  private persistDisplayLevel(difficulty: CustomDifficulty, chart: ChartData, file?: File): void {
+    if (chart.notes.length === 0) return;
+    const targetFile = file ?? this.currentFile ?? this.catalog[this.selectedIndex]?.file;
+    if (!targetFile) return;
+    savePersistedTrackLevel(fileSongRecordKey(targetFile), difficulty, chartDisplayLevel(chart));
   }
 
   getActiveRecordKey(): string | null {

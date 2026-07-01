@@ -247,12 +247,18 @@ function selectHubPlaySettingsRowsHtml(state: SelectHubViewState): string {
       </label>
       <label class="select-hub-settings-row select-hub-settings-row--select">
         <span class="select-hub-settings-label">${withTooltip(t('settings.laneBackground'), t('settings.laneBackgroundHint'))}</span>
-        <select id="lane-background-select" class="select-hub-settings-select">
-          ${LANE_BACKGROUND_IDS.map(
-            (id) =>
-              `<option value="${id}"${state.laneBackground === id ? ' selected' : ''}>${t(laneBackgroundI18nKey(id))}</option>`,
-          ).join('')}
-        </select>
+        <span class="lane-background-controls">
+          <select id="lane-background-select" class="select-hub-settings-select">
+            ${LANE_BACKGROUND_IDS.map(
+              (id) =>
+                `<option value="${id}"${state.laneBackground === id ? ' selected' : ''}>${t(laneBackgroundI18nKey(id))}</option>`,
+            ).join('')}
+          </select>
+          <button type="button" class="select-hub-lane-bg-pick" id="btn-lane-background-image">
+            ${t('settings.laneBgPickImage')}
+          </button>
+          <input type="file" id="lane-background-image-input" accept="image/png,image/jpeg,image/webp" hidden />
+        </span>
       </label>
     `;
 }
@@ -364,17 +370,14 @@ function songInfoPanelHtml(state: SelectHubViewState): string {
                   ${songRingCenterInnerHtml(state)}
                 </div>
                 <div class="song-info-eq-bars song-info-eq-bars--right" aria-hidden="true">${songInfoSideEqBarsHtml()}</div>
+                <div class="random-pick-stage-fx" id="random-pick-fx" hidden aria-live="polite">
+                  <div class="random-pick-fx-card">
+                    <span class="random-pick-fx-kicker" id="random-pick-fx-kicker" hidden></span>
+                    <span class="random-pick-fx-label" id="random-pick-fx-label"></span>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
-        <div class="random-pick-stage-fx" id="random-pick-fx" hidden aria-live="polite">
-          <div class="random-pick-fx-scrim" aria-hidden="true"></div>
-          <div class="random-pick-fx-ring random-pick-fx-ring--outer" aria-hidden="true"></div>
-          <div class="random-pick-fx-ring random-pick-fx-ring--inner" aria-hidden="true"></div>
-          <div class="random-pick-fx-card">
-            <span class="random-pick-fx-kicker" id="random-pick-fx-kicker" hidden></span>
-            <span class="random-pick-fx-label" id="random-pick-fx-label"></span>
           </div>
         </div>
       </div>

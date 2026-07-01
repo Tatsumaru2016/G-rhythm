@@ -9,17 +9,20 @@ export const MESSAGES = {
     'settings.scrollSpeed': 'スクロール速度',
     'settings.scrollSpeedHint': 'ノーツの落ちる速さ（0.5x〜2.0x）',
     'settings.displayTiming': '表示タイミング',
-    'settings.displayTimingHint':
-      'ノーツの表示位置を調整。SLOWが多い→マイナス、FASTが多い→プラス',
+    'settings.displayTimingHint': 'ノーツの表示位置を調整。SLOWが多い→マイナス、FASTが多い→プラス',
     'settings.laneBackground': 'レーン背景',
     'settings.laneBackgroundHint':
-      'プレイ中の4レーン背景。カスタム画像は1レーン98×512px（4レーン一括392×512px）推奨',
+      'プレイ中の4レーン背景。「カスタム画像」選択後に画像を選ぶ。推奨392×512px（4レーン一括）または98×512px（1レーン）',
     'settings.laneBg.classic': 'クラシック',
     'settings.laneBg.neonPlasma': 'ネオンプラズマ',
     'settings.laneBg.psychedelicSwirl': 'サイケスワール',
     'settings.laneBg.deepCosmos': 'ディープコスモス',
     'settings.laneBg.acidWave': 'アシッドウェーブ',
     'settings.laneBg.prismScan': 'プリズムスキャン',
+    'settings.laneBg.custom': 'カスタム画像',
+    'settings.laneBgPickImage': '画像を選ぶ',
+    'settings.laneBgImageFailed':
+      '画像の読み込みに失敗しました。392×512px程度のPNG/JPGをお試しください。',
     'settings.offset': 'OFFSET (秒)',
 
     'debug.fxPattern': '背景演出（デバッグ）',
@@ -36,7 +39,7 @@ export const MESSAGES = {
     'debug.fx.starburst': '8: Starburst（終盤）',
 
     'accessibility.notice':
-      '当サイト（または本コンテンツ）の一部には、激しい点滅やフラッシュを伴うコンテンツが含まれている場合があります。光感受性発作の懸念がある方はご注意ください。フラッシュ軽減にチェックすることで抑制を行いますが、個人差があるためプレイする場合は部屋を明るくし、画面から離れてプレイしてください。',
+      '当サイト（または本コンテンツ）の一部には、激しい点滅やフラッシュを伴うコンテンツが含まれている場合があります。光感受性発作の懸念がある方はご注意ください。フラッシュ軽減をONにすることで抑制を行いますが、個人差があるためプレイする場合は部屋を明るくし、画面から離れてプレイしてください。',
 
     'ui.countdownFlashWarning': '※この先、激しいフラッシュの点滅にご注意ください',
     'ui.songSelect': '曲選択',
@@ -46,6 +49,8 @@ export const MESSAGES = {
     'ui.titleSoundOn': 'SOUND ON',
     'ui.titleSoundOff': 'SOUND OFF',
     'ui.titleSoundToggle': 'タイトルBGMのオン／オフ',
+    'ui.titleFlashReduceOn': 'フラッシュ軽減 ON',
+    'ui.titleFlashReduceOff': 'フラッシュ軽減 OFF',
     'ui.songSelectTitle': 'MUSIC SELECT',
     'ui.back': 'BACK',
     'ui.play': 'PLAY',
@@ -168,17 +173,19 @@ export const MESSAGES = {
     'settings.scrollSpeed': 'Scroll speed',
     'settings.scrollSpeedHint': 'Note fall speed (0.5x–2.0x)',
     'settings.displayTiming': 'Display timing',
-    'settings.displayTimingHint':
-      'Shift note visuals. Many SLOW → minus; many FAST → plus',
+    'settings.displayTimingHint': 'Shift note visuals. Many SLOW → minus; many FAST → plus',
     'settings.laneBackground': 'Lane background',
     'settings.laneBackgroundHint':
-      '4-lane playfield look. Custom tiles: 98×512 px per lane (392×512 px strip)',
+      'In-game lane backdrop. Choose Custom image, then pick a file. Recommended 392×512px (4 lanes) or 98×512px (single lane).',
     'settings.laneBg.classic': 'Classic',
     'settings.laneBg.neonPlasma': 'Neon plasma',
     'settings.laneBg.psychedelicSwirl': 'Psychedelic swirl',
     'settings.laneBg.deepCosmos': 'Deep cosmos',
     'settings.laneBg.acidWave': 'Acid wave',
     'settings.laneBg.prismScan': 'Prism scan',
+    'settings.laneBg.custom': 'Custom image',
+    'settings.laneBgPickImage': 'Pick image',
+    'settings.laneBgImageFailed': 'Could not load the image. Try a PNG/JPG around 392×512px.',
     'settings.offset': 'OFFSET (sec)',
 
     'debug.fxPattern': 'Background FX (debug)',
@@ -195,7 +202,7 @@ export const MESSAGES = {
     'debug.fx.starburst': '8: Starburst (late)',
 
     'accessibility.notice':
-      'Some content on this site (or in this game) may include intense flashing or strobing effects. Please use caution if you are concerned about photosensitive seizures. Checking "Reduce flashing" helps suppress effects, but results vary by individual — if you play, keep the room well lit and sit back from the screen.',
+      'Some content on this site (or in this game) may include intense flashing or strobing effects. Please use caution if you are concerned about photosensitive seizures. Turning on "Reduce flashing" helps suppress effects, but results vary by individual — if you play, keep the room well lit and sit back from the screen.',
 
     'ui.countdownFlashWarning': '※ Caution: intense flashing effects ahead',
     'ui.songSelect': 'Song select',
@@ -205,6 +212,8 @@ export const MESSAGES = {
     'ui.titleSoundOn': 'SOUND ON',
     'ui.titleSoundOff': 'SOUND OFF',
     'ui.titleSoundToggle': 'Toggle title BGM on/off',
+    'ui.titleFlashReduceOn': 'REDUCE FLASHING ON',
+    'ui.titleFlashReduceOff': 'REDUCE FLASHING OFF',
     'ui.songSelectTitle': 'MUSIC SELECT',
     'ui.back': 'BACK',
     'ui.play': 'PLAY',

@@ -30,11 +30,16 @@ import {
   loadDisplayTiming,
   saveDisplayTiming,
   formatDisplayTiming,
-  MIN_DISPLAY_TIMING,
-  MAX_DISPLAY_TIMING,
-  DISPLAY_TIMING_STEP,
 } from '../settings/displayTiming';
 import { loadLaneBackground, saveLaneBackground } from '../settings/laneBackground';
+import { saveCustomLaneBackgroundDataUrl } from '../settings/customLaneBackgroundImage';
+import { preloadCustomLaneBackgroundImage } from '../game/laneBackground';
+import {
+  resolveFolderTrackIndex,
+  saveLastFolderTrackRecordKey,
+} from '../settings/folderSelectState';
+import { getPersistedTrackMeta } from '../data/trackMetaCache';
+import { getGenreLabel } from '../audio/musicGenre';
 import type { LaneBackgroundId } from '../game/laneBackground';
 import {
   DEFAULT_REDUCED_FLASH,
@@ -56,7 +61,8 @@ import type { AudioEngine } from '../audio/AudioEngine';
 import { getResultVoiceId, RESULT_RANK_REVEAL_DELAY_MS } from '../audio/resultVoice';
 import { renderFolderSongList } from './customSongList';
 import { renderChartLevelHtml, renderSongChartAnalysisHtml } from './chartRadarView';
-import { renderChartBestGradeBadge } from './bestGradeView';
+import { chartDisplayLevel } from '../chart/chartRadar';
+import { renderChartBestGradeBadge, renderBestGradeBadgeHtml } from './bestGradeView';
 import { RandomPickController } from './RandomPickController';
 import { escapeHtml } from './htmlUtils';
 import { accessibilityNoticeHtml, titleEqBarsHtml } from './titleScreenView';
@@ -198,6 +204,7 @@ export class UIManager {
     this.reducedFlash = loadReducedFlash();
     this.titleSoundEnabled = loadTitleSound();
     this.stageFxPattern = loadStageFxPattern();
+    preloadCustomLaneBackgroundImage();
     this.applyReducedFlashClass();
     this.randomPick = new RandomPickController({
       getScreenId: () => this.screenId,
@@ -508,6 +515,54 @@ export class UIManager {
       this.laneBackground = select.value as LaneBackgroundId;
       saveLaneBackground(this.laneBackground);
     });
+
+    const fileInput = this.overlay.querySelector(
+      '#lane-background-image-input',
+    ) as HTMLInputElement;
+    const pickBtn = this.overlay.querySelector('#btn-lane-background-image');
+
+    pickBtn?.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.playUiSelect();
+      fileInput?.click();
+    });
+
+    fileInput?.addEventListener('change', () => {
+      const file = fileInput.files?.[0];
+      fileInput.value = '';
+      if (!file) return;
+      void this.applyCustomLaneBackgroundImage(file);
+    });
+  }
+
+  private async applyCustomLaneBackgroundImage(file: File): Promise<void> {
+    try {
+      const dataUrl = await this.readImageFileAsDataUrl(file);
+      if (!saveCustomLaneBackgroundDataUrl(dataUrl)) {
+        this.showImportError(t('settings.laneBgImageFailed'));
+        return;
+      }
+      preloadCustomLaneBackgroundImage(dataUrl);
+      this.laneBackground = 'custom';
+      saveLaneBackground('custom');
+      const select = this.overlay.querySelector('#lane-background-select') as HTMLSelectElement;
+      if (select) select.value = 'custom';
+    } catch {
+      this.showImportError(t('settings.laneBgImageFailed'));
+    }
+  }
+
+  private readImageFileAsDataUrl(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === 'string') resolve(reader.result);
+        else reject(new Error('invalid image data'));
+      };
+      reader.onerror = () => reject(reader.error ?? new Error('read failed'));
+      reader.readAsDataURL(file);
+    });
   }
 
   private unbindTitleNavigation() {
@@ -800,7 +855,7 @@ export class UIManager {
       this.refreshSelectHubSongList();
       this.bindSelectHubRing();
       this.startFolderMetaPrefetch(this.selectHubTrackIndex);
-      void this.loadSelectHubTrack(this.selectHubTrackIndex);
+      this.hydrateSelectHubFolderTrack(this.selectHubTrackIndex);
     } else if (this.customLoader.getImportMode() === 'single' && this.customLoader.getBuffer()) {
       this.selectHubBuiltinIndex = null;
       this.refreshSelectHubSidebarSelection();
@@ -1015,6 +1070,7 @@ export class UIManager {
         this.selectedChart = c;
         const entry = this.customLoader.getCatalog()[this.customLoader.getSelectedIndex()];
         this.updateSelectHubCenterFromChart(c, entry?.title ?? c.title, c.audioDuration ?? 0);
+        this.refreshFolderSongCardRatings();
         updateTooltip(
           this.overlay,
           '#difficulty-label .has-tooltip',
@@ -1100,8 +1156,17 @@ export class UIManager {
   }
 
   private startSelectedChart(): void {
+    void this.startSelectedChartAsync();
+  }
+
+  private async startSelectedChartAsync(): Promise<void> {
     if (this.screenId !== 'select') return;
     if (this.isSelectHubRingLoading()) return;
+
+    if (this.selectHubBuiltinIndex === null && this.customLoader.isFolderMode()) {
+      const loaded = await this.ensureSelectHubTrackDecoded();
+      if (!loaded) return;
+    }
 
     let chart = this.selectedChart;
     if (this.selectHubBuiltinIndex !== null) {
@@ -1126,6 +1191,15 @@ export class UIManager {
     this.unbindSelectHubStart();
     this.audio.stopUserPreview();
     this.onStart(chart);
+  }
+
+  private async ensureSelectHubTrackDecoded(): Promise<boolean> {
+    if (this.canBuildCustomChart()) return true;
+    if (!this.customLoader.isFolderMode() || this.customLoader.getCatalog().length === 0) {
+      return false;
+    }
+    await this.loadSelectHubTrack(this.customLoader.getSelectedIndex());
+    return this.canBuildCustomChart();
   }
 
   private unbindSelectHubStart(): void {
@@ -1332,12 +1406,20 @@ export class UIManager {
   }
 
   private refreshFolderSongCardRatings(): void {
+    const catalog = this.customLoader.getCatalog();
     this.overlay.querySelectorAll('.folder-song-item').forEach((card) => {
       const index = Number((card as HTMLElement).dataset.listIndex);
       if (Number.isNaN(index)) return;
+      const chart = this.folderSongCardChart(index);
       const levelEl = card.querySelector('.song-band-card__level');
-      if (levelEl)
-        levelEl.innerHTML = renderChartLevelHtml(this.folderSongCardChart(index), 'card');
+      if (levelEl) levelEl.innerHTML = this.renderFolderSongLevelHtml(index);
+      const rankEl = card.querySelector('.song-band-card__rank');
+      if (rankEl) {
+        const track = catalog[index];
+        rankEl.innerHTML = track
+          ? renderBestGradeBadgeHtml(getSongBestGrade(trackEntryRecordKey(track)), 'card')
+          : renderChartBestGradeBadge(chart, 'card');
+      }
     });
   }
 
@@ -1349,6 +1431,8 @@ export class UIManager {
       if (!chart) return;
       const levelEl = card.querySelector('.song-band-card__level');
       if (levelEl) levelEl.innerHTML = renderChartLevelHtml(chart, 'card');
+      const rankEl = card.querySelector('.song-band-card__rank');
+      if (rankEl) rankEl.innerHTML = renderChartBestGradeBadge(chart, 'card');
     });
   }
 
@@ -1453,6 +1537,22 @@ export class UIManager {
     return this.customLoader.buildChartPreviewForFile(entry.file, this.customDifficulty);
   }
 
+  private folderSongDisplayLevel(catalogIndex: number): number | null {
+    const chart = this.folderSongCardChart(catalogIndex);
+    if (chart && chart.notes.length > 0) return chartDisplayLevel(chart);
+    const entry = this.customLoader.getCatalog()[catalogIndex];
+    if (!entry) return null;
+    return this.customLoader.getPersistedDisplayLevel(entry.file, this.customDifficulty);
+  }
+
+  private renderFolderSongLevelHtml(catalogIndex: number): string {
+    return renderChartLevelHtml(
+      this.folderSongCardChart(catalogIndex),
+      'card',
+      this.folderSongDisplayLevel(catalogIndex),
+    );
+  }
+
   private cancelFolderMetaPrefetch(): void {
     this.folderMetaPrefetchGen++;
     this.folderMetaPrefetchingIndex = null;
@@ -1481,19 +1581,44 @@ export class UIManager {
 
       const catalog = this.customLoader.getCatalog();
       const entry = catalog[catalogIndex];
-      if (!entry || this.customLoader.hasTrackMeta(entry.file)) {
-        if (entry) this.patchFolderSongCardMeta(catalogIndex);
+      if (!entry) continue;
+
+      const hasLevel =
+        this.customLoader.getPersistedDisplayLevel(entry.file, this.customDifficulty) !== null ||
+        this.customLoader.buildChartPreviewForFile(entry.file, this.customDifficulty) !== null;
+
+      if (this.customLoader.hasTrackMeta(entry.file) && hasLevel) {
+        this.onFolderTrackMetaReady(catalogIndex);
+        continue;
+      }
+
+      if (!this.customLoader.hasTrackMeta(entry.file)) {
+        try {
+          this.setFolderMetaPrefetchingIndex(catalogIndex);
+          await this.customLoader.analyzeTrackMeta(entry.file);
+          if (gen !== this.folderMetaPrefetchGen || this.screenId !== 'select') return;
+          this.onFolderTrackMetaReady(catalogIndex);
+        } catch (err) {
+          console.warn('[UIManager] folder track meta prefetch failed', entry.title, err);
+          this.customLoader.markTrackMetaFailed(entry.file);
+          if (gen === this.folderMetaPrefetchGen && this.screenId === 'select') {
+            this.onFolderTrackMetaReady(catalogIndex);
+          }
+        } finally {
+          if (this.folderMetaPrefetchingIndex === catalogIndex) {
+            this.setFolderMetaPrefetchingIndex(null);
+          }
+        }
         continue;
       }
 
       try {
         this.setFolderMetaPrefetchingIndex(catalogIndex);
-        await this.customLoader.analyzeTrackMeta(entry.file);
+        await this.customLoader.ensureChartPreviewForFile(entry.file, this.customDifficulty);
         if (gen !== this.folderMetaPrefetchGen || this.screenId !== 'select') return;
         this.onFolderTrackMetaReady(catalogIndex);
       } catch (err) {
-        console.warn('[UIManager] folder track meta prefetch failed', entry.title, err);
-        this.customLoader.markTrackMetaFailed(entry.file);
+        console.warn('[UIManager] folder chart preview prefetch failed', entry.title, err);
         if (gen === this.folderMetaPrefetchGen && this.screenId === 'select') {
           this.onFolderTrackMetaReady(catalogIndex);
         }
@@ -1534,7 +1659,7 @@ export class UIManager {
       `.folder-song-item[data-list-index="${catalogIndex}"] .song-band-card__level`,
     );
     if (!levelEl) return;
-    levelEl.innerHTML = renderChartLevelHtml(this.folderSongCardChart(catalogIndex), 'card');
+    levelEl.innerHTML = this.renderFolderSongLevelHtml(catalogIndex);
   }
 
   private patchFolderSongCardMeta(catalogIndex: number): void {
@@ -1676,6 +1801,7 @@ export class UIManager {
       (track) => this.formatFolderSongCardMeta(track),
       (track) => getSongBestGrade(trackEntryRecordKey(track)),
       (_track, catalogIndex) => this.folderSongCardChart(catalogIndex),
+      (_track, catalogIndex) => this.folderSongDisplayLevel(catalogIndex),
     );
     this.applySelectHubListLoadingState();
     this.scrollSelectedFolderSongCardIntoView('auto');
@@ -1790,6 +1916,105 @@ export class UIManager {
     this.syncSelectHubPreviewToggle();
   }
 
+  private syncCustomBpmOffsetSliders(): void {
+    const bpmSlider = this.overlay.querySelector('#bpm-slider') as HTMLInputElement | null;
+    const bpmValue = this.overlay.querySelector('#bpm-value');
+    if (bpmSlider) bpmSlider.value = String(this.customBpm);
+    if (bpmValue) bpmValue.textContent = String(this.customBpm);
+
+    const offsetSlider = this.overlay.querySelector('#offset-slider') as HTMLInputElement | null;
+    const offsetValue = this.overlay.querySelector('#offset-value');
+    if (offsetSlider) offsetSlider.value = String(this.customOffset);
+    if (offsetValue) offsetValue.textContent = this.customOffset.toFixed(1);
+  }
+
+  private hydrateSelectHubFolderTrack(index: number): void {
+    const catalog = this.customLoader.getCatalog();
+    const entry = catalog[index];
+    if (!entry) return;
+
+    this.selectHubTrackIndex = index;
+    this.selectHubBuiltinIndex = null;
+    this.customLoader.setSelectedIndex(index);
+    this.syncFolderSongListSelection(index);
+    this.scrollSelectedFolderSongCardIntoView('auto');
+    this.syncSelectHubBuiltinModeClass();
+    this.refreshSelectHubSidebarSelection();
+    this.audio.stopPreviewPlayback();
+
+    const preview = this.customLoader.buildChartPreviewForFile(entry.file, this.customDifficulty);
+    if (preview) {
+      this.customBpm = preview.bpm;
+      this.customOffset = 0;
+      this.syncCustomBpmOffsetSliders();
+      this.selectedChart = preview;
+      const sortMeta = this.customLoader.getTrackSortMeta(entry.file);
+      this.updateSelectHubCenterFromChart(
+        preview,
+        entry.title,
+        sortMeta.duration ?? preview.audioDuration ?? 0,
+      );
+      this.syncSelectHubPreviewToggle(false);
+      return;
+    }
+
+    const sortMeta = this.customLoader.getTrackSortMeta(entry.file);
+    const persisted = getPersistedTrackMeta(entry.id);
+    const bpm = sortMeta.bpm ?? persisted?.bpm ?? this.customBpm;
+    const duration = sortMeta.duration ?? persisted?.duration ?? 0;
+    this.customBpm = bpm;
+    this.customOffset = 0;
+    this.syncCustomBpmOffsetSliders();
+    this.selectedChart = null;
+
+    this.setRingCenterTitle(entry.title);
+    const metaEl = this.overlay.querySelector('#ring-center-meta');
+    const statsEl = this.overlay.querySelector('#ring-center-stats');
+    const counterEl = this.overlay.querySelector('#ring-track-counter');
+    if (metaEl) {
+      metaEl.textContent =
+        duration > 0
+          ? `${t('ui.customTrack')} \u00b7 ${this.formatDuration(duration)}`
+          : t('ui.customTrack');
+    }
+    if (statsEl) {
+      const parts: string[] = [formatChartBpm(bpm)];
+      if (persisted) parts.push(getGenreLabel(persisted.genre));
+      statsEl.textContent = parts.join(' \u00b7 ');
+    }
+    if (counterEl && catalog.length > 1) {
+      const displayIndex = folderCatalogDisplayIndex(catalog, this.folderSongSort, index, (track) =>
+        this.folderTrackSortMeta(track),
+      );
+      counterEl.textContent = t('ui.customFolderTrack', {
+        current: displayIndex + 1,
+        total: catalog.length,
+      });
+    }
+
+    const levelSlot = this.overlay.querySelector('#song-chart-level-slot');
+    if (levelSlot) {
+      levelSlot.innerHTML = renderChartLevelHtml(
+        null,
+        'panel',
+        this.customLoader.getPersistedDisplayLevel(entry.file, this.customDifficulty),
+      );
+    }
+    const bestSlot = this.overlay.querySelector('#song-best-grade-slot');
+    if (bestSlot) {
+      bestSlot.innerHTML = renderChartBestGradeBadge(null, 'panel');
+    }
+    const { radarHtml } = renderSongChartAnalysisHtml(null, { largeRadar: true });
+    const radarEl = this.overlay.querySelector('#song-chart-radar');
+    if (radarEl) {
+      radarEl.innerHTML = radarHtml;
+      radarEl.setAttribute('aria-hidden', 'true');
+      delete (radarEl as HTMLElement).dataset.chartId;
+    }
+    this.refreshFolderSongCardRatings();
+    this.syncSelectHubPreviewToggle(false);
+  }
+
   private async loadSelectHubTrack(index: number, options?: { silent?: boolean }): Promise<void> {
     const silent = options?.silent ?? this.customLoader.getCatalog().length <= 1;
     const gen = ++this.selectHubTrackLoadGen;
@@ -1833,17 +2058,11 @@ export class UIManager {
     try {
       const meta = await this.customLoader.selectTrack(index);
       if (gen !== this.selectHubTrackLoadGen) return;
+      if (entry) saveLastFolderTrackRecordKey(entry.id);
 
       this.customBpm = meta.suggestedBpm;
       this.customOffset = 0;
-      const bpmSlider = this.overlay.querySelector('#bpm-slider') as HTMLInputElement | null;
-      const bpmValue = this.overlay.querySelector('#bpm-value');
-      if (bpmSlider) bpmSlider.value = String(this.customBpm);
-      if (bpmValue) bpmValue.textContent = String(this.customBpm);
-      const offsetSlider = this.overlay.querySelector('#offset-slider') as HTMLInputElement | null;
-      const offsetValue = this.overlay.querySelector('#offset-value');
-      if (offsetSlider) offsetSlider.value = String(this.customOffset);
-      if (offsetValue) offsetValue.textContent = this.customOffset.toFixed(1);
+      this.syncCustomBpmOffsetSliders();
 
       const chart = this.customLoader.buildChart(
         this.customBpm,
@@ -1894,6 +2113,13 @@ export class UIManager {
     el.dataset.previewBound = '1';
     const toggle = async () => {
       if (isLoading()) return;
+      if (
+        !this.audio.isPreviewEnabled() &&
+        this.customLoader.isFolderMode() &&
+        !this.canBuildCustomChart()
+      ) {
+        await this.ensureSelectHubTrackDecoded();
+      }
       await this.audio.toggleUserPreview();
       this.syncPreviewToggleState(trigger, isLoading());
     };
@@ -2022,11 +2248,13 @@ export class UIManager {
     const folderLabel = folderName || folderNameFromFiles(audioFiles);
     this.cancelFolderMetaPrefetch();
     this.customLoader.setCatalogFromFiles(audioFiles, folderLabel);
+    const catalog = this.customLoader.getCatalog();
+    this.selectHubTrackIndex = resolveFolderTrackIndex(catalog);
+    this.customLoader.setSelectedIndex(this.selectHubTrackIndex);
     this.customBpm = 128;
     this.customOffset = 0;
     this.customDifficulty = 'NORMAL';
     this.selectHubBuiltinIndex = null;
-    this.selectHubTrackIndex = 0;
     if (options?.navigate !== false) {
       this.playUiSelect();
       void this.showSelect();
@@ -2231,6 +2459,7 @@ export class UIManager {
 
     const grade = getRank(stats, chart);
     const rankClass = ddrGradeCssClass(grade);
+    recordSongBestGrade(chart, grade);
 
     this.render(renderResultScreenHtml(stats, chart));
 
@@ -2285,9 +2514,6 @@ export class UIManager {
       starsEl.removeAttribute('aria-hidden');
     }
 
-    if (this.resultChart && !failed) {
-      recordSongBestGrade(this.resultChart, grade);
-    }
     void this.audio.playResultVoice(getResultVoiceId(grade));
   }
 
