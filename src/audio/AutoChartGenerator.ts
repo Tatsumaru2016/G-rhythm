@@ -51,20 +51,20 @@ const DIFFICULTY_CONFIG: Record<CustomDifficulty, DifficultyConfig> = {
     fallbackStep: 8,
   },
   HARD: {
-    minGapSec: 0.22,
-    minBeatGap: 2,
+    minGapSec: 0.30,
+    minBeatGap: 4,
     holdChance: false,
-    holdEnergy: 0.11,
+    holdEnergy: 0.14,
     holdBeatMod: 12,
     holdDuration: 6,
     holdSpawnChance: 0,
-    chordChance: 0.2,
-    maxChordLanes: 3,
-    fallbackStep: 4,
+    chordChance: 0.12,
+    maxChordLanes: 2,
+    fallbackStep: 6,
   },
   EXTREME: {
-    minGapSec: 0.14,
-    minBeatGap: 1,
+    minGapSec: 0.18,
+    minBeatGap: 2,
     holdChance: true,
     holdEnergy: 0.04,
     holdBeatMod: 4,
@@ -219,6 +219,14 @@ function isEmphasizedBeat(beat: number, lpb: number, emphasis: boolean): boolean
   return beat % (quarter * 4) === 0 || beat % (quarter * 2) === 0;
 }
 
+/** 難易度ごとの最小ビート間隔フロア（ジャンル補正後も下回らない） */
+const MIN_BEAT_GAP_FLOOR: Record<CustomDifficulty, number> = {
+  EASY: 10,
+  NORMAL: 5,
+  HARD: 3,
+  EXTREME: 1,
+};
+
 export function generateChart(
   buffer: AudioBuffer,
   title: string,
@@ -228,7 +236,11 @@ export function generateChart(
   genre: MusicGenre = 'other',
 ): ChartData {
   const genreMod = getGenreChartModifiers(genre);
-  const cfg = applyGenreToConfig(DIFFICULTY_CONFIG[difficulty], genreMod);
+  const cfgBase = applyGenreToConfig(DIFFICULTY_CONFIG[difficulty], genreMod);
+  const cfg = {
+    ...cfgBase,
+    minBeatGap: Math.max(MIN_BEAT_GAP_FLOOR[difficulty], cfgBase.minBeatGap),
+  };
   const lpb = genreMod.lpb;
   const onsets = detectOnsets(buffer, cfg.minGapSec, genreMod.onsetFluxScale);
   const maxTime = buffer.duration - 1;

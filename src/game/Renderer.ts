@@ -19,7 +19,7 @@ import {
 import type { AudioReactive } from '../audio/AudioEngine';
 import { DEFAULT_SCROLL_SPEED } from '../settings/scrollSpeed';
 import { isPlayStageDecorFxEnabled } from '../settings/playStageFx';
-import { getPhaseLabel, getPhaseScrollMultiplier, getSongPhase, PHASE_BACKGROUND_THEMES, type SongPhase } from './scrollPhase';
+import { getSongPhase, PHASE_BACKGROUND_THEMES, type SongPhase } from './scrollPhase';
 import { getGenreLabel, resolveGenre } from '../audio/musicGenre';
 import {
   getMilestoneSublabel,
@@ -297,9 +297,8 @@ export class Renderer {
     return this.scrollSpeed;
   }
 
-  private getEffectiveScrollMultiplier(currentTime: number): number {
-    const phaseMult = getPhaseScrollMultiplier(currentTime, this.songDuration);
-    return this.scrollSpeed * phaseMult;
+  private getEffectiveScrollMultiplier(_currentTime: number): number {
+    return this.scrollSpeed;
   }
 
   getNoteSpeed(currentTime = 0): number {
@@ -1945,15 +1944,14 @@ export class Renderer {
     );
 
     if (this.songDuration > 0) {
-      const phaseLabel = getPhaseLabel(currentTime, this.songDuration);
-      const phaseMult = getPhaseScrollMultiplier(currentTime, this.songDuration);
       ctx.font = '900 12px "Noto Sans JP", sans-serif';
-      const phaseColor = phaseMult >= 1.4
-        ? 'rgba(255, 120, 180, 0.95)'
-        : phaseMult >= 1.15
-          ? 'rgba(120, 220, 255, 0.92)'
-          : 'rgba(180, 255, 200, 0.88)';
-      this.drawHudOutlinedText(`${phaseLabel}  ×${phaseMult.toFixed(2)}`, hudRightX, 70, phaseColor);
+      const scrollBpm = Math.round(chart.bpm * this.scrollSpeed);
+      this.drawHudOutlinedText(
+        `×${this.scrollSpeed.toFixed(2)}  (${scrollBpm})`,
+        hudRightX,
+        70,
+        'rgba(120, 220, 255, 0.92)',
+      );
     }
 
     const total = stats.perfect + stats.great + stats.good + stats.bad + stats.miss;

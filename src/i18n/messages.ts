@@ -148,7 +148,7 @@ export const MESSAGES = {
 
     'difficulty.easy': 'BEGINNER相当 — シンプル配置・ホールドなし',
     'difficulty.normal': 'BASIC相当 — 標準密度・軽い同時押し',
-    'difficulty.hard': 'DIFFICULT相当 — 高密度・ジャンプ増',
+    'difficulty.hard': 'DIFFICULT相当 — 中〜高密度・軽いジャンプ',
     'difficulty.extreme': 'EXPERT相当 — 最大密度・ホールドあり',
 
     'game.hold': 'HOLD',
@@ -309,7 +309,7 @@ export const MESSAGES = {
 
     'difficulty.easy': 'BEGINNER — simple steps, no holds',
     'difficulty.normal': 'BASIC — standard density, light chords',
-    'difficulty.hard': 'DIFFICULT — high density, more jumps',
+    'difficulty.hard': 'DIFFICULT — moderate density, light jumps',
     'difficulty.extreme': 'EXPERT — max density, with holds',
 
     'game.hold': 'HOLD',
