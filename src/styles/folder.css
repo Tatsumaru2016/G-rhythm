@@ -594,7 +594,7 @@ body.reduced-flash .result-chroma-edge {
 .select-hub-screen .song-ring-center .ready-title {
   font-family: 'Noto Sans JP', sans-serif;
   font-size: clamp(1.25rem, 3.8vw, 1.85rem);
-  font-weight: 800;
+  font-weight: 400;
   letter-spacing: 0.02em;
   line-height: 1.28;
   margin: 0.08rem 0 0.2rem;
@@ -605,13 +605,13 @@ body.reduced-flash .result-chroma-edge {
   width: 100%;
   min-width: 0;
   max-width: 100%;
-  max-height: calc(3 * 1.28em);
+  max-height: calc(2 * 1.28em);
   white-space: normal;
   overflow: hidden;
   text-overflow: ellipsis;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   overflow-wrap: anywhere;
   word-break: break-word;
   box-sizing: border-box;
@@ -694,12 +694,24 @@ body.reduced-flash .result-chroma-edge {
   .select-hub-settings-stack {
     width: min(22rem, calc(100vw - 1.1rem));
     gap: 0.48rem;
+    --hub-settings-label-w: clamp(6.35rem, 22vw, 7.65rem);
+    --hub-settings-tip-w: 0.9rem;
+    --hub-settings-col-gap: 0.58rem;
+    --hub-settings-value-w: 2.65rem;
+  }
+
+  .select-hub-settings-stack .select-hub-settings-row--slider,
+  .select-hub-settings-stack .select-hub-settings-row--select {
+    grid-template-columns: var(--hub-settings-label-w) minmax(4.75rem, 8.5rem) minmax(
+        var(--hub-settings-value-w),
+        auto
+      );
   }
 
   .select-hub-settings-stack .select-hub-settings-row input[type='range'] {
-    width: min(8.5rem, 42vw);
-    max-width: 8.5rem;
-    min-width: 4.75rem;
+    width: 100%;
+    max-width: none;
+    min-width: 0;
   }
 
   .select-hub-settings-label,
@@ -730,21 +742,24 @@ body.reduced-flash .result-chroma-edge {
 
   .select-hub-custom-dock {
     width: min(100%, calc(100vw - 1.1rem));
+    max-width: min(220px, 42vw);
   }
 
   .select-hub-custom-imports .select-hub-import-btn {
-    min-height: clamp(3.35rem, 14vw, 4.1rem);
-    padding: 0.45rem 0.35rem;
-    gap: 0.28rem;
+    height: auto;
+    min-height: clamp(3.55rem, 13vw, 4.25rem);
+    padding: 0.42rem 0.4rem 0.48rem;
+    gap: 0.26rem;
   }
   .select-hub-screen:not(.is-folder-list-mode) .select-hub-custom-imports .select-hub-import-btn {
-    min-height: clamp(3.55rem, 15vw, 4.35rem);
+    min-height: clamp(3.7rem, 14vw, 4.45rem);
   }
   .select-hub-screen.is-folder-list-mode .select-hub-custom-imports .select-hub-import-btn {
-    min-height: clamp(3.2rem, 13vw, 3.85rem);
+    min-height: clamp(3.35rem, 12vw, 4rem);
   }
-  .select-hub-import-label {
-    font-size: clamp(0.5rem, 2.8vw, 0.62rem);
+  .select-hub-custom-imports .select-hub-import-label {
+    font-size: clamp(0.56rem, 2.6vw, 0.68rem);
+    line-height: 1.35;
   }
   .select-hub-title-logo {
     width: min(92vw, 420px);

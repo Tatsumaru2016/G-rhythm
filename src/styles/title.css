@@ -772,6 +772,20 @@ body.reduced-flash .title-eq-bars {
   display: none;
 }
 
+body.title-sound-off .title-eq-bar {
+  animation: none !important;
+  opacity: 0.55;
+}
+
+body.title-sound-off .title-eq-bars--top .title-eq-bar,
+body.title-sound-off .title-eq-bars--bottom .title-eq-bar {
+  transform: scaleY(var(--eq-lo, 0.2));
+}
+
+body.title-sound-off .song-info-eq-bars .title-eq-bar {
+  transform: scaleX(var(--eq-lo, 0.2));
+}
+
 body.reduced-flash .title-bg-fx .title-bg-canvas {
   opacity: 0.72;
   filter: contrast(1.2) saturate(1.1) brightness(1);

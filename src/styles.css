@@ -149,6 +149,12 @@ body {
   pointer-events: none;
 }
 
+.nav-bracket-glyphs {
+  font-family: 'Noto Sans JP', sans-serif;
+  font-style: normal;
+  font-weight: 800;
+}
+
 .btn-play-hud {
   padding: 0.45rem 0.85rem;
   font-family: 'Noto Sans JP', sans-serif;

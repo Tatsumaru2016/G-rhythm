@@ -75,6 +75,7 @@ async function main() {
     },
     customLoader,
     audio,
+    (chartId) => builtinAudio.getBuffer(chartId),
   );
 
   init.game = new Game(canvas, audio, {

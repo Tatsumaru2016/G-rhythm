@@ -189,6 +189,17 @@ export class CustomSongLoader {
     return this.decodeFile(this.catalog[wrapped].file);
   }
 
+  /** Decode the selected catalog track and wire preview audio without rebuilding select-hub UI. */
+  async ensureSelectedTrackAudio(): Promise<boolean> {
+    if (!this.isFolderMode() || this.catalog.length === 0) return false;
+    try {
+      await this.selectTrack(this.selectedIndex);
+      return this.buffer !== null;
+    } catch {
+      return false;
+    }
+  }
+
   /** Decode + analyze one track; safe to call in background for folder catalog meta. */
   async analyzeTrackMeta(file: File): Promise<CustomTrackSortMeta> {
     const analysis = await this.ensureTrackAnalysis(file);

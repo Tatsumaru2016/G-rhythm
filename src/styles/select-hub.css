@@ -362,22 +362,25 @@ body.reduced-flash .select-hub-title-logo {
 
 .select-hub-custom-imports {
   display: flex;
-  flex-direction: row;
-  gap: clamp(0.42rem, 1.3vw, 0.7rem);
+  flex-direction: column;
+  align-items: stretch;
+  gap: clamp(0.42rem, 1.3vw, 0.65rem);
+  width: 100%;
   margin-top: 0.08rem;
   pointer-events: auto;
 }
 
 .select-hub-custom-imports .select-hub-import-btn {
-  flex: 1 1 0;
-  width: auto;
+  flex: 0 0 auto;
+  width: 100%;
   min-width: 0;
-  min-height: clamp(3.75rem, 11vw, 4.85rem);
+  height: auto;
+  min-height: clamp(3.75rem, 10.5vw, 4.75rem);
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  gap: 0.38rem;
-  padding: 0.58rem 0.5rem;
+  gap: 0.32rem;
+  padding: 0.5rem 0.45rem 0.55rem;
   border: 2px solid #ffffff;
   border-radius: 14px;
   color: #ffffff;
@@ -400,7 +403,7 @@ body.reduced-flash .select-hub-title-logo {
     inset 0 -3px 12px rgba(0, 80, 160, 0.2);
   animation: btn-select-play-gradient 6s ease-in-out infinite;
   position: relative;
-  overflow: hidden;
+  overflow: visible;
   isolation: isolate;
   transition:
     border-color 0.15s ease,
@@ -432,10 +435,16 @@ body.reduced-flash .select-hub-title-logo {
 }
 
 .select-hub-custom-imports .select-hub-import-label {
-  font-weight: 900;
-  letter-spacing: 0.06em;
+  font-family: 'Noto Sans JP', sans-serif;
+  font-size: clamp(0.62rem, 1.75vw, 0.78rem);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.35;
+  text-align: center;
   color: #ffffff;
-  -webkit-text-stroke: clamp(1px, 0.04em, 1.8px) #000;
+  white-space: normal;
+  overflow: visible;
+  -webkit-text-stroke: clamp(0.8px, 0.035em, 1.4px) #000;
   paint-order: stroke fill;
   text-shadow:
     0 1px 0 rgba(0, 0, 0, 0.72),
@@ -443,18 +452,18 @@ body.reduced-flash .select-hub-title-logo {
 }
 
 .select-hub-custom-imports .select-hub-import-icon {
-  width: clamp(1.55rem, 4.2vw, 1.95rem);
-  height: clamp(1.55rem, 4.2vw, 1.95rem);
+  width: clamp(1.35rem, 3.6vw, 1.7rem);
+  height: clamp(1.35rem, 3.6vw, 1.7rem);
   filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.65)) drop-shadow(0 0 8px rgba(255, 255, 255, 0.35));
 }
 
 .select-hub-screen.is-folder-list-mode .select-hub-custom-imports .select-hub-import-btn {
-  min-height: clamp(3.5rem, 10vw, 4.35rem);
-  padding: 0.5rem 0.45rem;
+  min-height: clamp(3.55rem, 9.5vw, 4.35rem);
+  padding: 0.45rem 0.5rem 0.5rem;
 }
 
 .select-hub-screen:not(.is-folder-list-mode) .select-hub-custom-imports .select-hub-import-btn {
-  min-height: clamp(4rem, 11.5vw, 5rem);
+  min-height: clamp(3.85rem, 10.5vw, 4.85rem);
 }
 
 .select-hub-import-label {
@@ -948,7 +957,7 @@ body.reduced-flash .select-hub-title-logo {
 
 .select-hub-custom-dock {
   flex: 0 0 auto;
-  width: min(500px, 56vw);
+  width: min(220px, 34vw);
   min-width: 0;
   display: flex;
   align-items: stretch;
@@ -996,8 +1005,8 @@ body.reduced-flash .select-hub-title-logo {
 }
 
 .select-hub-radar-dock .chart-radar-disc {
-  width: min(300px, 30vw);
-  height: min(300px, 30vw);
+  width: min(270px, 27vw);
+  height: min(270px, 27vw);
   padding: 0;
 }
 
@@ -1088,6 +1097,9 @@ body.reduced-flash .select-hub-title-logo {
 .song-band-nav-label {
   display: block;
   pointer-events: none;
+  font-family: 'Noto Sans JP', sans-serif;
+  font-style: normal;
+  font-weight: 800;
   -webkit-text-stroke: clamp(1.6px, 0.09em, 2.6px) rgba(0, 0, 0, 0.92);
   paint-order: stroke fill;
   text-shadow:
@@ -1558,7 +1570,7 @@ body.reduced-flash .song-band-card.is-band-decide-flash::after {
 .song-band-card__index {
   font-family: 'Noto Sans JP', sans-serif;
   font-size: clamp(0.92rem, 2.05vw, 1.1rem);
-  font-weight: 700;
+  font-weight: 400;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.06em;
   color: #063a5c;
@@ -1594,7 +1606,7 @@ body.reduced-flash .song-band-card.is-band-decide-flash::after {
   padding-bottom: 0;
   font-family: 'Noto Sans JP', sans-serif;
   font-size: clamp(0.86rem, 1.85vw, 1.02rem);
-  font-weight: 700;
+  font-weight: 400;
   letter-spacing: 0.02em;
   line-height: 1.36;
   color: var(--hub-panel-text);
@@ -1636,7 +1648,7 @@ body.reduced-flash .song-band-card.is-band-decide-flash::after {
 
 .song-band-card.is-selected .song-band-card__index {
   color: #9a1248;
-  font-weight: 800;
+  font-weight: 400;
   text-shadow:
     var(--hub-ui-outline-shadow),
     0 0 10px rgba(255, 45, 154, 0.22);
@@ -1676,12 +1688,17 @@ body.reduced-flash .song-band-card.is-band-decide-flash::after {
   gap: 0.55rem;
   pointer-events: auto;
   width: min(24rem, calc(100vw - 1.2rem));
+  --hub-settings-label-w: clamp(6.85rem, 18vw, 8.35rem);
+  --hub-settings-tip-w: 0.95rem;
+  --hub-settings-col-gap: 0.65rem;
+  --hub-settings-value-w: 2.85rem;
   --hub-settings-text: rgba(200, 230, 255, 0.92);
   --hub-settings-accent: #00f3ff;
   --hub-settings-accent-muted: rgba(0, 243, 255, 0.78);
 }
 
 .select-hub-screen .select-hub-settings-label,
+.select-hub-screen .select-hub-settings-label-text,
 .select-hub-screen .select-hub-settings-value,
 .select-hub-screen .select-hub-settings-stack .difficulty-option,
 .select-hub-screen .select-hub-settings-stack .difficulty-picker-current,
@@ -1745,37 +1762,100 @@ body.reduced-flash .song-band-card.is-band-decide-flash::after {
   cursor: default;
 }
 
-.select-hub-settings-row--select {
-  flex-wrap: wrap;
-  row-gap: 0.34rem;
+.select-hub-settings-stack .select-hub-settings-row--slider,
+.select-hub-settings-stack .select-hub-settings-row--select {
+  display: grid;
+  grid-template-columns: var(--hub-settings-label-w) minmax(5.25rem, 9rem) minmax(
+      var(--hub-settings-value-w),
+      auto
+    );
+  column-gap: var(--hub-settings-col-gap);
+  align-items: center;
+  width: 100%;
 }
 
-.select-hub-settings-row--select .select-hub-settings-label {
-  flex: 1 1 auto;
+.select-hub-settings-stack .select-hub-settings-row--slider > *,
+.select-hub-settings-stack .select-hub-settings-row--select > * {
   min-width: 0;
+}
+
+.select-hub-settings-stack .select-hub-settings-row--slider .select-hub-settings-label,
+.select-hub-settings-stack .select-hub-settings-row--select .select-hub-settings-label {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--hub-settings-tip-w);
+  column-gap: 0.35rem;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+
+.select-hub-settings-stack .select-hub-settings-label-text {
+  justify-self: end;
+  min-width: 0;
+  font-family: 'Noto Sans JP', 'Orbitron', sans-serif;
+  font-size: clamp(0.74rem, 2vw, 0.88rem);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--hub-settings-text);
+  white-space: nowrap;
+  text-align: right;
+}
+
+.select-hub-settings-stack .select-hub-settings-label-tip {
+  justify-self: center;
+  width: var(--hub-settings-tip-w);
+  height: var(--hub-settings-tip-w);
+}
+
+.select-hub-settings-stack .select-hub-settings-label-tip.is-empty {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.select-hub-settings-stack .select-hub-settings-label-tip.has-tooltip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: none;
+  cursor: help;
+}
+
+.select-hub-settings-stack .select-hub-settings-label-tip.has-tooltip::after {
+  margin-left: 0;
+}
+
+.select-hub-settings-row--select {
+  flex-wrap: nowrap;
 }
 
 .lane-background-controls {
   display: flex;
-  flex: 0 1 auto;
+  grid-column: 2 / -1;
+  flex: none;
   align-items: center;
+  justify-content: flex-end;
   gap: 0.35rem;
   min-width: 0;
 }
 
 .select-hub-lane-bg-pick {
   flex: 0 0 auto;
-  padding: 0.22rem 0.45rem;
-  font-family: 'Noto Sans JP', sans-serif;
-  font-size: clamp(0.62rem, 1.7vw, 0.74rem);
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.28rem 0.38rem;
   color: var(--hub-settings-text);
   background: rgba(0, 0, 0, 0.35);
   border: 1px solid rgba(0, 229, 255, 0.35);
   border-radius: 4px;
   cursor: pointer;
-  white-space: nowrap;
+}
+
+.select-hub-lane-bg-pick-icon {
+  display: block;
+  width: clamp(0.95rem, 2.5vw, 1.1rem);
+  height: clamp(0.95rem, 2.5vw, 1.1rem);
 }
 
 .select-hub-lane-bg-pick:hover {
@@ -1822,7 +1902,7 @@ body.reduced-flash .song-band-card.is-band-decide-flash::after {
 
 .select-hub-settings-value {
   flex: 0 0 auto;
-  min-width: 2.85rem;
+  min-width: var(--hub-settings-value-w, 2.85rem);
   font-family: 'Orbitron', sans-serif;
   font-size: clamp(0.78rem, 2.15vw, 0.95rem);
   font-weight: 700;
@@ -1835,10 +1915,10 @@ body.reduced-flash .song-band-card.is-band-decide-flash::after {
 }
 
 .select-hub-settings-stack .select-hub-settings-row input[type='range'] {
-  flex: 1 1 auto;
-  width: min(9rem, 38vw);
-  max-width: 9rem;
-  min-width: 5.25rem;
+  flex: none;
+  width: 100%;
+  max-width: none;
+  min-width: 0;
   height: 1.2rem;
   margin: 0;
   accent-color: #00e5ff;
@@ -2072,7 +2152,7 @@ body.reduced-flash .song-band-card.is-band-decide-flash::after {
 }
 
 .select-hub-screen .song-info-panel-wrap {
-  margin-top: 20px;
+  margin-top: 0;
 }
 
 .song-info-hub-row {
@@ -2097,7 +2177,7 @@ body.reduced-flash .song-band-card.is-band-decide-flash::after {
 .select-hub-screen .song-info-hub-row .select-hub-radar-dock {
   position: absolute;
   left: calc((100% - var(--song-panel-legacy-w)) / 2 - 50px);
-  top: 30px;
+  top: 45px;
   margin: 0;
   justify-self: auto;
   align-self: auto;
@@ -2117,7 +2197,7 @@ body.reduced-flash .song-band-card.is-band-decide-flash::after {
 
 .song-info-eq-bars {
   position: absolute;
-  top: var(--song-panel-radius, 18px);
+  top: calc(var(--song-panel-radius, 18px) + var(--song-eq-top-h, 0px));
   bottom: var(--song-panel-radius, 18px);
   flex: 0 0 auto;
   display: flex;
@@ -2147,6 +2227,19 @@ body.reduced-flash .song-band-card.is-band-decide-flash::after {
 .song-info-eq-bars--right {
   left: 100%;
   align-items: flex-start;
+}
+
+.select-hub-screen .song-info-panel-row .song-ring-center .song-info-eq-bars-top {
+  position: relative;
+  flex: 0 0 auto;
+  align-self: center;
+  width: min(92%, 100%);
+  max-width: none;
+  margin: -0.2rem 0 0.42rem;
+  transform: none;
+  height: clamp(1.5rem, 3.8vh, 2.75rem);
+  z-index: 3;
+  pointer-events: none;
 }
 
 .song-info-panel-body {
@@ -2232,7 +2325,8 @@ body.reduced-flash .song-band-card.is-band-decide-flash::after {
   }
 }
 
-body.reduced-flash .song-info-eq-bars {
+body.reduced-flash .song-info-eq-bars,
+body.reduced-flash .song-info-eq-bars-top {
   display: none;
 }
 
@@ -2315,6 +2409,7 @@ body.reduced-flash .select-hub-screen.is-folder-list-mode .folder-song-detail {
   border: 1px solid var(--hub-panel-border);
   border-radius: 18px;
   --song-panel-radius: 18px;
+  --song-eq-top-h: clamp(1.55rem, 3.9vh, 2.65rem);
   --song-eq-corner-bar-skip: 3;
   background: var(--hub-panel-bg);
   color: var(--hub-panel-text);
@@ -2640,15 +2735,15 @@ body.reduced-flash .select-hub-screen .song-chart-level--hero .song-chart-level_
 .select-hub-screen .song-chart-radar-gap {
   display: block;
   width: 100%;
-  height: 85px;
-  min-height: 85px;
-  flex: 0 0 85px;
+  height: 76px;
+  min-height: 76px;
+  flex: 0 0 76px;
   pointer-events: none;
 }
 
 .select-hub-screen .song-chart-radar-offset {
   width: 100%;
-  max-width: min(360px, 92vw);
+  max-width: min(324px, 83vw);
   margin: 0 auto;
   padding: 0;
   flex: 0 0 auto;
@@ -2678,15 +2773,15 @@ body.reduced-flash .select-hub-screen .song-chart-level--hero .song-chart-level_
 }
 
 .select-hub-screen .chart-radar-disc {
-  width: min(300px, 88vw);
-  height: min(300px, 88vw);
+  width: min(270px, 79vw);
+  height: min(270px, 79vw);
   padding: 0;
   flex-shrink: 0;
 }
 
 .select-hub-screen .select-hub-radar-dock .chart-radar-disc {
-  width: min(300px, 30vw);
-  height: min(300px, 30vw);
+  width: min(270px, 27vw);
+  height: min(270px, 27vw);
 }
 
 .chart-radar-disc {
@@ -2694,8 +2789,8 @@ body.reduced-flash .select-hub-screen .song-chart-level--hero .song-chart-level_
   display: flex;
   align-items: center;
   justify-content: center;
-  width: min(340px, 82vw);
-  height: min(340px, 82vw);
+  width: min(306px, 74vw);
+  height: min(306px, 74vw);
   padding: 0;
   background: transparent;
   border: none;
@@ -2719,14 +2814,14 @@ body.reduced-flash .select-hub-screen .song-chart-level--hero .song-chart-level_
 }
 
 .chart-radar-svg {
-  width: min(196px, 52vw);
+  width: min(176px, 47vw);
   height: auto;
   display: block;
   overflow: visible;
 }
 
 .chart-radar-svg--large {
-  width: min(400px, 92vw);
+  width: min(360px, 83vw);
   height: auto;
   overflow: visible;
   shape-rendering: geometricPrecision;

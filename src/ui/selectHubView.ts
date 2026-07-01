@@ -30,10 +30,17 @@ import {
 import { sortBuiltinIndices } from '../data/builtinCatalogSort';
 import { renderChartLevelHtml, renderSongChartAnalysisHtml } from './chartRadarView';
 import { renderChartBestGradeBadge } from './bestGradeView';
-import { songInfoSideEqBarsHtml } from './titleScreenView';
+import { titleEqBarsHtml, songInfoSideEqBarsHtml } from './titleScreenView';
 import { escapeHtml } from './htmlUtils';
-import { withTooltip } from './tooltip';
+import { escapeTooltipText, withTooltip } from './tooltip';
 import { t, tDifficultyHint, formatChartBpm, formatNotesCount } from '../i18n';
+
+function playSettingsLabel(text: string, hint?: string): string {
+  const tipHtml = hint
+    ? `<span class="has-tooltip select-hub-settings-label-tip" tabindex="0"><span class="tooltip-bubble" role="tooltip">${escapeTooltipText(hint)}</span></span>`
+    : `<span class="select-hub-settings-label-tip is-empty" aria-hidden="true"></span>`;
+  return `<span class="select-hub-settings-label"><span class="select-hub-settings-label-text">${escapeHtml(text)}</span>${tipHtml}</span>`;
+}
 
 export interface SelectHubViewState {
   isBuiltin: boolean;
@@ -222,31 +229,31 @@ function selectHubPlaySettingsRowsHtml(state: SelectHubViewState): string {
         </div>
       </div>
       <label class="select-hub-settings-row select-hub-settings-row--slider">
-        <span class="select-hub-settings-label">${t('ui.bpmLabel')}</span>
+        ${playSettingsLabel(t('ui.bpmLabel'))}
         <input type="range" id="bpm-slider" min="80" max="200" value="${state.customBpm}" />
         <span class="select-hub-settings-value" id="bpm-value">${state.customBpm}</span>
       </label>
       <label class="select-hub-settings-row select-hub-settings-row--slider">
-        <span class="select-hub-settings-label">${t('settings.offset')}</span>
+        ${playSettingsLabel(t('settings.offset'))}
         <input type="range" id="offset-slider" min="0" max="3" step="0.1" value="${state.customOffset}" />
         <span class="select-hub-settings-value" id="offset-value">${state.customOffset.toFixed(1)}</span>
       </label>
       <label class="select-hub-settings-row select-hub-settings-row--slider">
-        <span class="select-hub-settings-label">${withTooltip(t('settings.scrollSpeed'), t('settings.scrollSpeedHint'))}</span>
+        ${playSettingsLabel(t('settings.scrollSpeed'), t('settings.scrollSpeedHint'))}
         <input type="range" id="speed-slider"
           min="${MIN_SCROLL_SPEED * 100}" max="${MAX_SCROLL_SPEED * 100}" step="5"
           value="${Math.round(state.scrollSpeed * 100)}" />
         <span class="select-hub-settings-value" id="speed-value">${formatScrollSpeed(state.scrollSpeed)}</span>
       </label>
       <label class="select-hub-settings-row select-hub-settings-row--slider">
-        <span class="select-hub-settings-label">${withTooltip(t('settings.displayTiming'), t('settings.displayTimingHint'))}</span>
+        ${playSettingsLabel(t('settings.displayTiming'), t('settings.displayTimingHint'))}
         <input type="range" id="display-timing-slider"
           min="${MIN_DISPLAY_TIMING}" max="${MAX_DISPLAY_TIMING}" step="${DISPLAY_TIMING_STEP}"
           value="${state.displayTiming}" />
         <span class="select-hub-settings-value" id="display-timing-value">${formatDisplayTiming(state.displayTiming)}</span>
       </label>
       <label class="select-hub-settings-row select-hub-settings-row--select">
-        <span class="select-hub-settings-label">${withTooltip(t('settings.laneBackground'), t('settings.laneBackgroundHint'))}</span>
+        ${playSettingsLabel(t('settings.laneBackground'), t('settings.laneBackgroundHint'))}
         <span class="lane-background-controls">
           <select id="lane-background-select" class="select-hub-settings-select">
             ${LANE_BACKGROUND_IDS.map(
@@ -254,8 +261,14 @@ function selectHubPlaySettingsRowsHtml(state: SelectHubViewState): string {
                 `<option value="${id}"${state.laneBackground === id ? ' selected' : ''}>${t(laneBackgroundI18nKey(id))}</option>`,
             ).join('')}
           </select>
-          <button type="button" class="select-hub-lane-bg-pick" id="btn-lane-background-image">
-            ${t('settings.laneBgPickImage')}
+          <button
+            type="button"
+            class="select-hub-lane-bg-pick"
+            id="btn-lane-background-image"
+            aria-label="${t('settings.laneBgPickImage')}"
+            title="${t('settings.laneBgPickImage')}"
+          >
+            <svg class="select-hub-lane-bg-pick-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
           </button>
           <input type="file" id="lane-background-image-input" accept="image/png,image/jpeg,image/webp" hidden />
         </span>
@@ -365,6 +378,7 @@ function songInfoPanelHtml(state: SelectHubViewState): string {
                 class="song-ring-center${state.folderListMode ? ' folder-song-detail' : ''}"
                 id="song-ring-center"
               >
+                <div class="song-info-eq-bars-top title-eq-bars title-eq-bars--top" aria-hidden="true">${titleEqBarsHtml()}</div>
                 <div class="song-info-eq-bars song-info-eq-bars--left" aria-hidden="true">${songInfoSideEqBarsHtml()}</div>
                 <div class="song-info-panel-body">
                   ${songRingCenterInnerHtml(state)}
@@ -388,7 +402,7 @@ export function selectHubNavHtml(): string {
   return `
       <nav class="select-hub-nav-fx" aria-label="${t('ui.songSelectTitle')}">
         <button type="button" class="btn-select-nav-back" id="btn-goto-title" aria-label="${t('ui.backToTitle')}">
-          <span class="btn-select-nav-back-label">${t('ui.backToTitle')}</span>
+          <span class="btn-select-nav-back-label"><span class="nav-bracket-glyphs">&lt;&lt;</span> ${t('ui.backToTitleLabel')}</span>
         </button>
         <div class="select-hub-play-cluster">
           <div class="select-hub-play-slot">

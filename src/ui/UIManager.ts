@@ -135,6 +135,7 @@ export class UIManager {
   private onExitToTitle: () => void;
   private customLoader: CustomSongLoader;
   private audio: AudioEngine;
+  private getBuiltinPreviewBuffer: ((chartId: string) => AudioBuffer | null) | null;
   private selectedChart: ChartData | null = null;
   private lastChart: ChartData | null = null;
   private customBpm = 128;
@@ -191,6 +192,7 @@ export class UIManager {
     onExitToTitle: () => void,
     customLoader: CustomSongLoader,
     audio: AudioEngine,
+    getBuiltinPreviewBuffer?: (chartId: string) => AudioBuffer | null,
   ) {
     this.overlay = overlay;
     this.touchLayer = touchLayer;
@@ -201,11 +203,13 @@ export class UIManager {
     this.onExitToTitle = onExitToTitle;
     this.customLoader = customLoader;
     this.audio = audio;
+    this.getBuiltinPreviewBuffer = getBuiltinPreviewBuffer ?? null;
     this.reducedFlash = loadReducedFlash();
     this.titleSoundEnabled = loadTitleSound();
     this.stageFxPattern = loadStageFxPattern();
     preloadCustomLaneBackgroundImage();
     this.applyReducedFlashClass();
+    this.syncEqMotionState();
     this.randomPick = new RandomPickController({
       getScreenId: () => this.screenId,
       getOverlay: () => this.overlay,
@@ -409,6 +413,17 @@ export class UIManager {
 
   private syncTitleSoundToggleState(btn: HTMLElement | null): void {
     syncHubToggleElement(btn, { on: this.titleSoundEnabled });
+    this.syncEqMotionState();
+  }
+
+  private syncEqMotionState(): void {
+    const eqActive =
+      this.screenId === 'select'
+        ? this.audio.isPreviewEnabled()
+        : this.screenId === 'title'
+          ? this.titleSoundEnabled
+          : false;
+    document.body.classList.toggle('title-sound-off', !eqActive);
   }
 
   private bindTitleSoundToggle(): void {
@@ -765,6 +780,7 @@ export class UIManager {
 
     this.render(renderSelectHubScreenHtml(this.buildSelectHubViewState()));
 
+    this.syncEqMotionState();
     this.bindSelectHub();
     this.mountSelectHubBackground();
     this.hidePlayHud();
@@ -868,10 +884,6 @@ export class UIManager {
       this.selectedChart = chart;
       this.updateSelectHubCenterFromChart(chart, chart.title, chart.audioDuration ?? 0);
       this.refreshSelectHubRing();
-      this.syncSelectHubPreviewToggle();
-      if (this.audio.isPreviewEnabled()) {
-        void this.audio.startUserPreview();
-      }
     } else {
       const index = this.selectHubBuiltinIndex ?? 0;
       this.selectSelectHubBuiltin(index, false);
@@ -885,7 +897,32 @@ export class UIManager {
     this.syncRandomPlayButton();
     this.syncSongBandNavButtons();
     this.syncSelectHubPreviewToggle(false);
+    void this.syncSelectHubDefaultPreview();
     requestAnimationFrame(() => this.scrollSelectedSongBandCardIntoView('auto'));
+  }
+
+  private async syncSelectHubDefaultPreview(): Promise<void> {
+    if (!this.audio.isPreviewEnabled() || this.screenId !== 'select') return;
+
+    if (this.selectHubBuiltinIndex !== null) {
+      const chart = CHARTS[this.selectHubBuiltinIndex];
+      const buffer = this.getBuiltinPreviewBuffer?.(chart.id) ?? null;
+      if (buffer) await this.audio.startBufferPreview(buffer, true, 0);
+      return;
+    }
+
+    if (this.customLoader.isFolderMode() && this.customLoader.getCatalog().length > 0) {
+      if (!this.customLoader.getBuffer()) {
+        const loaded = await this.customLoader.ensureSelectedTrackAudio();
+        if (!loaded) return;
+      }
+      await this.audio.startUserPreview();
+      return;
+    }
+
+    if (this.customLoader.getImportMode() === 'single' && this.customLoader.getBuffer()) {
+      await this.audio.startUserPreview();
+    }
   }
 
   private bindSelectHubNav(): void {
@@ -1454,6 +1491,7 @@ export class UIManager {
     this.scrollSelectedSongBandCardIntoView('auto');
     this.syncSongBandNavButtons();
     this.flashSelectedBandCard();
+    void this.syncSelectHubDefaultPreview();
   }
 
   private refreshSelectHubSidebarSelection(): void {
@@ -2140,6 +2178,7 @@ export class UIManager {
     if (!el) return;
     const enabled = this.audio.isPreviewEnabled();
     syncHubToggleElement(el, { on: enabled, loading });
+    this.syncEqMotionState();
   }
 
   private unbindCustomRingNavigation(): void {
