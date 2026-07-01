@@ -674,10 +674,11 @@ body.reduced-flash .select-hub-title-logo {
 }
 
 .song-sort-select {
-  flex: 0 1 6.35rem;
-  max-width: 6.35rem;
-  min-width: 0;
-  padding: 0.32rem 1.2rem 0.32rem 0.45rem;
+  flex: 1 1 auto;
+  width: auto;
+  min-width: clamp(7.75rem, 21vw, 9.25rem);
+  max-width: clamp(8.5rem, 24vw, 10rem);
+  padding: 0.32rem 1.35rem 0.32rem 0.5rem;
   border: 1px solid rgba(48, 120, 170, 0.35);
   border-radius: 8px;
   font-family: 'Noto Sans JP', sans-serif;
@@ -1038,7 +1039,7 @@ body.reduced-flash .select-hub-title-logo {
 }
 
 .select-hub-song-band-toolbar .song-sort-bar {
-  width: min(230px, calc(100vw - clamp(0.55rem, 1.8vw, 0.9rem) - 20px - 0.75rem));
+  width: min(300px, calc(100vw - clamp(0.55rem, 1.8vw, 0.9rem) - 20px - 0.75rem));
 }
 
 .select-hub-screen:not(.is-builtin-mode) #builtin-song-sort-bar {
@@ -1054,9 +1055,35 @@ body.reduced-flash .select-hub-title-logo {
   width: 100%;
 }
 
-.song-band-nav {
+.song-band-nav-group {
   position: absolute;
   top: 50%;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: clamp(0.06rem, 0.45vw, 0.2rem);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.song-band-nav-group .song-band-nav {
+  pointer-events: auto;
+}
+
+.song-band-nav-group--start {
+  left: clamp(0.04rem, 0.7vw, 0.18rem);
+  gap: clamp(0.28rem, 1.15vw, 0.58rem);
+}
+
+.song-band-nav-group--end {
+  right: clamp(0.04rem, 0.7vw, 0.18rem);
+}
+
+.song-band-nav {
+  position: relative;
+  top: auto;
+  left: auto;
+  right: auto;
   z-index: 4;
   display: inline-flex;
   align-items: center;
@@ -1064,7 +1091,7 @@ body.reduced-flash .select-hub-title-logo {
   width: auto;
   height: auto;
   margin: 0;
-  padding: 0.1rem 0.2rem;
+  padding: 0.1rem 0.16rem;
   border: none;
   border-radius: 0;
   background: transparent;
@@ -1073,9 +1100,9 @@ body.reduced-flash .select-hub-title-logo {
   box-shadow: none;
   cursor: pointer;
   pointer-events: auto;
-  transform: translateY(-50%);
+  transform: none;
   font-family: 'Orbitron', sans-serif;
-  font-size: clamp(1.35rem, 4.2vw, 1.9rem);
+  font-size: clamp(1.2rem, 3.8vw, 1.75rem);
   font-weight: 900;
   font-style: italic;
   line-height: 1;
@@ -1086,12 +1113,10 @@ body.reduced-flash .select-hub-title-logo {
     text-shadow 0.15s ease;
 }
 
-.song-band-nav--prev {
-  left: clamp(0.1rem, 1.2vw, 0.35rem);
-}
-
-.song-band-nav--next {
-  right: clamp(0.1rem, 1.2vw, 0.35rem);
+.song-band-nav--first,
+.song-band-nav--last {
+  font-size: clamp(1.05rem, 3.35vw, 1.55rem);
+  padding-inline: 0.1rem;
 }
 
 .song-band-nav-label {
@@ -1125,26 +1150,32 @@ body.reduced-flash .select-hub-title-logo {
     1px 1px 0 rgba(0, 0, 0, 0.82);
 }
 
+.song-band-nav--first:hover:not(:disabled),
+.song-band-nav--first:focus-visible:not(:disabled),
 .song-band-nav--prev:hover:not(:disabled),
 .song-band-nav--prev:focus-visible:not(:disabled) {
-  transform: translateY(-50%) translateX(-3px);
+  transform: translateX(-3px);
 }
 
 .song-band-nav--next:hover:not(:disabled),
-.song-band-nav--next:focus-visible:not(:disabled) {
-  transform: translateY(-50%) translateX(3px);
+.song-band-nav--next:focus-visible:not(:disabled),
+.song-band-nav--last:hover:not(:disabled),
+.song-band-nav--last:focus-visible:not(:disabled) {
+  transform: translateX(3px);
 }
 
 .song-band-nav:active:not(:disabled) {
-  transform: translateY(-50%) scale(0.96);
+  transform: scale(0.96);
 }
 
+.song-band-nav--first:active:not(:disabled),
 .song-band-nav--prev:active:not(:disabled) {
-  transform: translateY(-50%) translateX(-4px) scale(0.96);
+  transform: translateX(-4px) scale(0.96);
 }
 
-.song-band-nav--next:active:not(:disabled) {
-  transform: translateY(-50%) translateX(4px) scale(0.96);
+.song-band-nav--next:active:not(:disabled),
+.song-band-nav--last:active:not(:disabled) {
+  transform: translateX(4px) scale(0.96);
 }
 
 .song-band-nav:disabled {
@@ -1169,7 +1200,7 @@ body.reduced-flash .select-hub-title-logo {
   min-height: clamp(8rem, 19vh, 10rem);
   overflow-x: auto;
   overflow-y: hidden;
-  padding: 1.85rem clamp(2rem, 6vw, 2.65rem) 0.75rem;
+  padding: 1.85rem clamp(2.85rem, 8.5vw, 3.55rem) 0.75rem;
   scroll-behavior: smooth;
   scrollbar-width: none;
   -ms-overflow-style: none;

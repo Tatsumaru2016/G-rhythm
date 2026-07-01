@@ -64,3 +64,18 @@ export function stepBuiltinIndex(
   const nextDisplay = (base + delta + order.length) % order.length;
   return order[nextDisplay];
 }
+
+export function firstBuiltinIndex(
+  charts: readonly ChartData[],
+  settings: SongSortSettings,
+): number {
+  return sortBuiltinIndices(charts, settings)[0] ?? 0;
+}
+
+export function lastBuiltinIndex(
+  charts: readonly ChartData[],
+  settings: SongSortSettings,
+): number {
+  const order = sortBuiltinIndices(charts, settings);
+  return order[order.length - 1] ?? 0;
+}

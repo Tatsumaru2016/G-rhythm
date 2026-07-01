@@ -83,8 +83,10 @@ import {
   sortFolderCatalog,
   folderCatalogDisplayIndex,
   stepFolderCatalogIndex,
+  firstFolderCatalogIndex,
+  lastFolderCatalogIndex,
 } from '../audio/songCatalogSort';
-import { stepBuiltinIndex } from '../data/builtinCatalogSort';
+import { stepBuiltinIndex, firstBuiltinIndex, lastBuiltinIndex } from '../data/builtinCatalogSort';
 import {
   BUILTIN_SORT_KEYS,
   FOLDER_SORT_KEYS,
@@ -916,6 +918,7 @@ export class UIManager {
         const loaded = await this.customLoader.ensureSelectedTrackAudio();
         if (!loaded) return;
       }
+      this.syncSelectHubSelectedFolderChartUi();
       await this.audio.startUserPreview();
       return;
     }
@@ -952,12 +955,16 @@ export class UIManager {
   }
 
   private syncSongBandNavButtons(): void {
+    const firstBtn = this.overlay.querySelector('#song-band-nav-first') as HTMLButtonElement | null;
     const prevBtn = this.overlay.querySelector('#song-band-nav-prev') as HTMLButtonElement | null;
     const nextBtn = this.overlay.querySelector('#song-band-nav-next') as HTMLButtonElement | null;
+    const lastBtn = this.overlay.querySelector('#song-band-nav-last') as HTMLButtonElement | null;
     const enabled =
       this.isSongBandVisible() && this.songBandCardCount() > 1 && !this.isRandomPickLocked();
+    firstBtn?.toggleAttribute('disabled', !enabled);
     prevBtn?.toggleAttribute('disabled', !enabled);
     nextBtn?.toggleAttribute('disabled', !enabled);
+    lastBtn?.toggleAttribute('disabled', !enabled);
   }
 
   private resetSongBandRailTransform(): void {
@@ -1024,6 +1031,32 @@ export class UIManager {
     void this.loadSelectHubTrack(next);
   }
 
+  private jumpSelectHubSongBand(to: 'first' | 'last'): void {
+    if (!this.isSongBandVisible() || this.isRandomPickLocked()) return;
+    if (this.selectHubBuiltinIndex !== null) {
+      if (CHARTS.length <= 1) return;
+      const target =
+        to === 'first'
+          ? firstBuiltinIndex(CHARTS, this.builtinSongSort)
+          : lastBuiltinIndex(CHARTS, this.builtinSongSort);
+      if (target === this.selectHubBuiltinIndex) return;
+      this.playUiNavigate();
+      this.selectSelectHubBuiltin(target);
+      return;
+    }
+    if (!this.shouldShowFolderSongList()) return;
+    const tracks = this.customLoader.getCatalog();
+    if (tracks.length <= 1) return;
+    const getMeta = (track: (typeof tracks)[number]) => this.folderTrackSortMeta(track);
+    const target =
+      to === 'first'
+        ? firstFolderCatalogIndex(tracks, this.folderSongSort, getMeta)
+        : lastFolderCatalogIndex(tracks, this.folderSongSort, getMeta);
+    if (target === this.customLoader.getSelectedIndex()) return;
+    this.playUiNavigate();
+    void this.loadSelectHubTrack(target);
+  }
+
   private unbindSelectHubSongBandNav(): void {
     if (this.selectHubSongBandKeyHandler) {
       window.removeEventListener('keydown', this.selectHubSongBandKeyHandler, true);
@@ -1042,11 +1075,17 @@ export class UIManager {
   private bindSelectHubSongBandNav(): void {
     this.unbindSelectHubSongBandNav();
 
+    this.overlay.querySelector('#song-band-nav-first')?.addEventListener('click', () => {
+      this.jumpSelectHubSongBand('first');
+    });
     this.overlay.querySelector('#song-band-nav-prev')?.addEventListener('click', () => {
       this.stepSelectHubSongBand(-1);
     });
     this.overlay.querySelector('#song-band-nav-next')?.addEventListener('click', () => {
       this.stepSelectHubSongBand(1);
+    });
+    this.overlay.querySelector('#song-band-nav-last')?.addEventListener('click', () => {
+      this.jumpSelectHubSongBand('last');
     });
 
     const scroll = this.overlay.querySelector('#select-hub-song-band-scroll') as HTMLElement | null;
@@ -1690,6 +1729,12 @@ export class UIManager {
     if (this.folderSongSort.key === 'bpm' || this.folderSongSort.key === 'duration') {
       this.refreshSelectHubSongList();
     }
+    if (
+      catalogIndex === this.customLoader.getSelectedIndex() &&
+      this.selectHubLoadingCatalogIndex !== catalogIndex
+    ) {
+      this.syncSelectHubSelectedFolderChartUi(catalogIndex);
+    }
   }
 
   private patchFolderSongCardLevel(catalogIndex: number): void {
@@ -1954,6 +1999,49 @@ export class UIManager {
     this.syncSelectHubPreviewToggle();
   }
 
+  private syncSelectHubSelectedFolderChartUi(catalogIndex = this.customLoader.getSelectedIndex()): void {
+    if (this.selectHubBuiltinIndex !== null || this.screenId !== 'select') return;
+
+    const catalog = this.customLoader.getCatalog();
+    const entry = catalog[catalogIndex];
+    if (!entry) return;
+
+    const preview = this.customLoader.buildChartPreviewForFile(entry.file, this.customDifficulty);
+    if (preview) {
+      if (!this.customLoader.getBuffer()) {
+        this.customBpm = preview.bpm;
+        this.customOffset = 0;
+        this.syncCustomBpmOffsetSliders();
+      }
+      this.selectedChart = preview;
+      const sortMeta = this.customLoader.getTrackSortMeta(entry.file);
+      this.updateSelectHubCenterFromChart(
+        preview,
+        entry.title,
+        sortMeta.duration ?? preview.audioDuration ?? 0,
+      );
+      return;
+    }
+
+    if (!this.customLoader.getBuffer()) return;
+
+    try {
+      const sortMeta = this.customLoader.getTrackSortMeta(entry.file);
+      const bpm = sortMeta.bpm ?? this.customBpm;
+      this.customBpm = bpm;
+      this.syncCustomBpmOffsetSliders();
+      const chart = this.customLoader.buildChart(bpm, this.customOffset, this.customDifficulty);
+      this.selectedChart = chart;
+      this.updateSelectHubCenterFromChart(
+        chart,
+        entry.title,
+        sortMeta.duration ?? chart.audioDuration ?? 0,
+      );
+    } catch (err) {
+      console.warn('[UIManager] failed to sync folder chart preview', entry.title, err);
+    }
+  }
+
   private syncCustomBpmOffsetSliders(): void {
     const bpmSlider = this.overlay.querySelector('#bpm-slider') as HTMLInputElement | null;
     const bpmValue = this.overlay.querySelector('#bpm-value');
@@ -1982,16 +2070,8 @@ export class UIManager {
 
     const preview = this.customLoader.buildChartPreviewForFile(entry.file, this.customDifficulty);
     if (preview) {
-      this.customBpm = preview.bpm;
-      this.customOffset = 0;
-      this.syncCustomBpmOffsetSliders();
       this.selectedChart = preview;
-      const sortMeta = this.customLoader.getTrackSortMeta(entry.file);
-      this.updateSelectHubCenterFromChart(
-        preview,
-        entry.title,
-        sortMeta.duration ?? preview.audioDuration ?? 0,
-      );
+      this.syncSelectHubSelectedFolderChartUi(index);
       this.syncSelectHubPreviewToggle(false);
       return;
     }

@@ -732,12 +732,18 @@ body.reduced-flash .result-chroma-edge {
   }
 
   .select-hub-song-band-scroll {
-    padding-left: clamp(1.85rem, 6.5vw, 2.35rem);
-    padding-right: clamp(1.85rem, 6.5vw, 2.35rem);
+    padding-left: clamp(2.35rem, 8vw, 3rem);
+    padding-right: clamp(2.35rem, 8vw, 3rem);
   }
 
   .song-band-nav {
-    font-size: clamp(1.2rem, 5vw, 1.65rem);
+    font-size: clamp(1.05rem, 4.5vw, 1.45rem);
+    padding-inline: 0.1rem;
+  }
+
+  .song-band-nav--first,
+  .song-band-nav--last {
+    font-size: clamp(0.95rem, 4vw, 1.3rem);
   }
 
   .select-hub-custom-dock {

@@ -298,14 +298,24 @@ function selectHubSongBandHtml(state: SelectHubViewState): string {
           ${songSortBarHtml('folder', state.folderSongSort, FOLDER_SORT_KEYS)}
         </div>
         <div class="select-hub-song-band-scroll-wrap">
-          <button
-            type="button"
-            class="song-band-nav song-band-nav--prev"
-            id="song-band-nav-prev"
-            aria-label="${t('ui.ringPrev')}"
-          >
-            <span class="song-band-nav-label" aria-hidden="true">&lt;</span>
-          </button>
+          <div class="song-band-nav-group song-band-nav-group--start">
+            <button
+              type="button"
+              class="song-band-nav song-band-nav--first"
+              id="song-band-nav-first"
+              aria-label="${t('ui.ringFirst')}"
+            >
+              <span class="song-band-nav-label" aria-hidden="true">|&lt;</span>
+            </button>
+            <button
+              type="button"
+              class="song-band-nav song-band-nav--prev"
+              id="song-band-nav-prev"
+              aria-label="${t('ui.ringPrev')}"
+            >
+              <span class="song-band-nav-label" aria-hidden="true">&lt;</span>
+            </button>
+          </div>
           <div class="select-hub-song-band-scroll" id="select-hub-song-band-scroll">
             <div class="select-hub-builtin-band" id="select-hub-builtin-rail">
               ${selectHubBuiltinCardsHtml(state.selectHubBuiltinIndex, state.builtinSongSort)}
@@ -314,14 +324,24 @@ function selectHubSongBandHtml(state: SelectHubViewState): string {
               <div class="folder-song-list-track" id="folder-song-list-track"></div>
             </div>
           </div>
-          <button
-            type="button"
-            class="song-band-nav song-band-nav--next"
-            id="song-band-nav-next"
-            aria-label="${t('ui.ringNext')}"
-          >
-            <span class="song-band-nav-label" aria-hidden="true">&gt;</span>
-          </button>
+          <div class="song-band-nav-group song-band-nav-group--end">
+            <button
+              type="button"
+              class="song-band-nav song-band-nav--next"
+              id="song-band-nav-next"
+              aria-label="${t('ui.ringNext')}"
+            >
+              <span class="song-band-nav-label" aria-hidden="true">&gt;</span>
+            </button>
+            <button
+              type="button"
+              class="song-band-nav song-band-nav--last"
+              id="song-band-nav-last"
+              aria-label="${t('ui.ringLast')}"
+            >
+              <span class="song-band-nav-label" aria-hidden="true">&gt;|</span>
+            </button>
+          </div>
         </div>
         </div>
         <div class="select-hub-custom-dock select-hub-custom-dock--band">
