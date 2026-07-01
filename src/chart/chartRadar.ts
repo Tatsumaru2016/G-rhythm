@@ -78,8 +78,3 @@ export function chartDisplayLevel(chart: ChartData): number {
   if (chart.notes.length === 0) return 1;
   return analyzeChart(chart).level;
 }
-
-/** @deprecated chartRadarStars を使用 */
-export function chartLevelToStars(level: number, maxStars = CHART_STAR_MAX): number {
-  return scoreToChartStars(Math.round((level / 20) * 100), maxStars);
-}

@@ -1,11 +1,4 @@
-import { tPhase } from '../i18n';
-
 export type SongPhase = 'early' | 'mid' | 'late';
-
-/** DDR準拠: スクロール速度は BPM×ユーザー設定のみ（曲進行フェーズでは変化しない） */
-export function getPhaseScrollMultiplier(_time: number, _duration: number): number {
-  return 1;
-}
 
 /** 演出の色相組み合わせ（動きは共通、色のみフェーズで変化） */
 export interface PhaseColorScheme {
@@ -103,8 +96,4 @@ export function getSongPhase(time: number, duration: number): SongPhase {
   if (progress < 1 / 3) return 'early';
   if (progress < 2 / 3) return 'mid';
   return 'late';
-}
-
-export function getPhaseLabel(time: number, duration: number): string {
-  return tPhase(getSongPhase(time, duration));
 }

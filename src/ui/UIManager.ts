@@ -45,17 +45,7 @@ import { getResultVoiceId, RESULT_RANK_REVEAL_DELAY_MS } from '../audio/resultVo
 import { renderFolderSongList } from './customSongList';
 import { renderChartLevelHtml, renderChartRatingHtml, renderSongChartAnalysisHtml } from './chartRadarView';
 import { renderChartBestGradeBadge } from './bestGradeView';
-import {
-  pickRandomCatalogIndex,
-  buildRandomPickRouletteSteps,
-  randomRouletteStepDelay,
-  RANDOM_PICK_AUTO_START_MS,
-  RANDOM_PICK_DECIDE_FLASH_MS,
-  RANDOM_PICK_EXPAND_MS,
-  RANDOM_PICK_FLASH_MS,
-  RANDOM_PICK_FLY_MS,
-  RANDOM_PICK_ROULETTE_STOP_MS,
-} from './randomPickSequence';
+import { RandomPickController } from './RandomPickController';
 import { sortFolderCatalog, folderCatalogDisplayIndex, stepFolderCatalogIndex } from '../audio/songCatalogSort';
 import { sortBuiltinIndices, stepBuiltinIndex } from '../data/builtinCatalogSort';
 import {
@@ -77,7 +67,6 @@ import { TitleScreenBackground } from './titleScreenBackground';
 import { bindTooltips, updateTooltip, withTooltip } from './tooltip';
 import {
   formatChartBpm,
-  formatLevel,
   formatNotesCount,
   getLocale,
   onLocaleChange,
@@ -167,9 +156,7 @@ export class UIManager {
   private selectHubLoadingCatalogIndex: number | null = null;
   private folderSongSort: SongSortSettings = loadFolderSongSort();
   private builtinSongSort: SongSortSettings = loadBuiltinSongSort();
-  private randomPickActive = false;
-  private randomPickLocked = false;
-  private randomPickGen = 0;
+  private randomPick: RandomPickController;
   private skipNextGameCountdown = false;
   private screenId: ScreenId = 'none';
   private loadingMessageKey: MessageKey = 'ui.loadingAudio';
@@ -209,6 +196,29 @@ export class UIManager {
     this.titleSoundEnabled = loadTitleSound();
     this.stageFxPattern = loadStageFxPattern();
     this.applyReducedFlashClass();
+    this.randomPick = new RandomPickController({
+      getScreenId: () => this.screenId,
+      getOverlay: () => this.overlay,
+      getCustomLoader: () => this.customLoader,
+      getAudio: () => this.audio,
+      getFolderSongSort: () => this.folderSongSort,
+      folderTrackSortMeta: (track) => this.folderTrackSortMeta(track),
+      canRandomFolderPlay: () => this.canRandomFolderPlay(),
+      isSelectHubRingLoading: () => this.isSelectHubRingLoading(),
+      getSelectedChart: () => this.selectedChart,
+      scrollSongBandCardIntoView: (el, behavior) => this.scrollSongBandCardIntoView(el, behavior),
+      setRingCenterTitle: (title) => this.setRingCenterTitle(title),
+      flashBandCardDecide: (card) => this.flashBandCardDecide(card),
+      escapeHtml: (text) => this.escapeHtml(text),
+      loadSelectHubTrack: (index, opts) => this.loadSelectHubTrack(index, opts),
+      startSelectedChart: () => this.startSelectedChart(),
+      unbindCustomRingNavigation: () => this.unbindCustomRingNavigation(),
+      bindSelectHubRing: () => this.bindSelectHubRing(),
+      syncRandomPlayButton: () => this.syncRandomPlayButton(),
+      syncSongBandNavButtons: () => this.syncSongBandNavButtons(),
+      burstSelectHubWarp: () => this.selectHubBg.burstWarp(),
+      requestSkipGameCountdown: () => { this.skipNextGameCountdown = true; },
+    });
 
     onLocaleChange(() => this.refreshScreen());
   }
@@ -299,30 +309,6 @@ export class UIManager {
 
   private playUiDecide(): void {
     void this.audio.resume().then(() => this.audio.playUiDecide());
-  }
-
-  private async ensureRandomPickAudio(): Promise<void> {
-    await this.audio.resume();
-    await this.audio.ensureRandomPickSoundsLoaded();
-  }
-
-  private async playRandomPickRoulette(): Promise<void> {
-    await this.ensureRandomPickAudio();
-    this.audio.playRandomPickRoulette();
-  }
-
-  private stopRandomPickRoulette(): void {
-    this.audio.stopRandomPickRoulette();
-  }
-
-  private async playRandomPickSongDecided(): Promise<void> {
-    await this.ensureRandomPickAudio();
-    this.audio.playRandomPickSongDecided();
-  }
-
-  private async playRandomPickPanelLand(): Promise<void> {
-    await this.ensureRandomPickAudio();
-    this.audio.playRandomPickPanelLand();
   }
 
   private accessibilityNoticeHtml(): string {
@@ -577,6 +563,7 @@ export class UIManager {
           <div class="title-scanlines"></div>
           <div class="title-noise"></div>
         </div>
+        ${this.accessibilityNoticeHtml()}
         <div class="title-hero">
           <div class="title-logo-wrap">
             <div class="title-eq-bars title-eq-bars--top" aria-hidden="true">${titleEqBarsHtml()}</div>
@@ -949,24 +936,11 @@ export class UIManager {
       <span class="song-preview-state" title="${t('settings.reducedFlash')}">
         <span class="song-preview-icon song-preview-icon--on">
           <span class="title-flash-icon-wrap" aria-hidden="true">${icon}</span>
-          <span class="song-preview-label">ON</span>
+          <span class="song-preview-label">${t('ui.titleSoundOn')}</span>
         </span>
         <span class="song-preview-icon song-preview-icon--off">
           <span class="title-flash-icon-wrap" aria-hidden="true">${icon}</span>
-          <span class="song-preview-label">OFF</span>
-        </span>
-      </span>
-    `;
-  }
-
-  private titleToggleStateHtml(titleKey: MessageKey = 'ui.previewToggle'): string {
-    return `
-      <span class="song-preview-state" title="${t(titleKey)}">
-        <span class="song-preview-icon song-preview-icon--on">
-          <span class="song-preview-label">ON</span>
-        </span>
-        <span class="song-preview-icon song-preview-icon--off">
-          <span class="song-preview-label">OFF</span>
+          <span class="song-preview-label">${t('ui.titleSoundOff')}</span>
         </span>
       </span>
     `;
@@ -1504,52 +1478,16 @@ export class UIManager {
   }
 
   private resetRandomPickState(): void {
-    this.randomPickGen++;
-    this.randomPickActive = false;
-    this.randomPickLocked = false;
     this.skipNextGameCountdown = false;
-    this.stopRandomPickRoulette();
-    this.syncRandomPickLockUi();
+    this.randomPick.reset();
   }
 
   private isRandomPickLocked(): boolean {
-    return this.randomPickActive || this.randomPickLocked;
+    return this.randomPick.isLocked();
   }
 
   private syncRandomPickLockUi(): void {
-    const screen = this.overlay.querySelector('#select-hub-screen');
-    screen?.classList.toggle('is-random-pick-active', this.randomPickActive);
-    screen?.classList.toggle('is-random-pick-locked', this.randomPickLocked);
-    screen?.classList.toggle('is-random-pick-spectacle', this.randomPickActive || this.randomPickLocked);
-    screen?.classList.remove('is-random-pick-reveal', 'is-random-pick-decide');
-
-    const fx = this.overlay.querySelector('#random-pick-fx') as HTMLElement | null;
-    if (fx && !this.randomPickActive && !this.randomPickLocked) {
-      fx.hidden = true;
-      fx.classList.remove('random-pick-fx--decide', 'random-pick-fx--spin');
-      const kicker = this.overlay.querySelector('#random-pick-fx-kicker') as HTMLElement | null;
-      if (kicker) kicker.hidden = true;
-    }
-
-    this.overlay.querySelector('#song-ring-center')
-      ?.classList.remove(
-        'is-random-pick-reveal',
-        'is-random-pick-locked-panel',
-        'is-random-pick-landed',
-        'is-random-pick-flash',
-      );
-    this.clearRandomPickListHighlight();
-    this.removeRandomPickFlyClone();
-    this.syncRandomPlayButton();
-    this.syncSongBandNavButtons();
-  }
-
-  private removeRandomPickFlyClone(): void {
-    this.overlay.querySelector('#random-pick-fly-layer')?.replaceChildren();
-  }
-
-  private getRandomPickFlyLayer(): HTMLElement | null {
-    return this.overlay.querySelector('#random-pick-fly-layer') as HTMLElement | null;
+    this.randomPick.syncLockUi();
   }
 
   private syncRandomPlayButton(): void {
@@ -1564,347 +1502,8 @@ export class UIManager {
     }
   }
 
-  private sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => window.setTimeout(resolve, ms));
-  }
-
-  private setRandomPickFx(label: string, phase: 'spin' | 'reveal' | 'decide' | 'hidden'): void {
-    const fx = this.overlay.querySelector('#random-pick-fx') as HTMLElement | null;
-    const labelEl = this.overlay.querySelector('#random-pick-fx-label');
-    const kickerEl = this.overlay.querySelector('#random-pick-fx-kicker') as HTMLElement | null;
-    const screen = this.overlay.querySelector('#select-hub-screen');
-    if (!fx || !labelEl) return;
-
-    if (phase === 'hidden') {
-      fx.hidden = true;
-      fx.classList.remove('random-pick-fx--decide', 'random-pick-fx--spin');
-      if (kickerEl) kickerEl.hidden = true;
-      screen?.classList.remove('is-random-pick-reveal', 'is-random-pick-decide');
-      return;
-    }
-
-    fx.hidden = false;
-    fx.classList.toggle('random-pick-fx--decide', phase === 'decide');
-    fx.classList.toggle('random-pick-fx--spin', phase === 'spin');
-    screen?.classList.toggle('is-random-pick-reveal', phase === 'reveal');
-    screen?.classList.toggle('is-random-pick-decide', phase === 'decide');
-
-    if (phase === 'decide') {
-      if (kickerEl) {
-        kickerEl.hidden = false;
-        kickerEl.textContent = t('ui.randomPickDecidedHead');
-      }
-      labelEl.textContent = t('ui.randomPickDecidedSoon');
-      return;
-    }
-
-    if (kickerEl) kickerEl.hidden = true;
-    labelEl.textContent = label;
-  }
-
-  private async revealRandomPickDecision(gen: number, catalogIndex: number): Promise<boolean> {
-    if (gen !== this.randomPickGen || this.screenId !== 'select') return false;
-
-    this.focusRandomPickSong(catalogIndex);
-    this.selectHubBg.burstWarp();
-    const center = this.overlay.querySelector('#song-ring-center');
-    center?.classList.remove('is-random-pick-flash', 'is-random-pick-landed');
-    void (center as HTMLElement | undefined)?.offsetWidth;
-    center?.classList.add('is-random-pick-landed');
-    await this.playRandomPickPanelLand();
-
-    this.setRandomPickFx(t('ui.randomPickDecidedSoon'), 'decide');
-    await this.playRandomPickSongDecided();
-
-    await this.sleep(RANDOM_PICK_DECIDE_FLASH_MS);
-    if (gen !== this.randomPickGen || this.screenId !== 'select') return false;
-
-    center?.classList.remove('is-random-pick-landed');
-    center?.classList.add('is-random-pick-locked-panel');
-    return true;
-  }
-
-  private clearRandomPickListHighlight(): void {
-    this.overlay.querySelectorAll('.folder-song-item').forEach((item) => {
-      item.classList.remove('is-random-pick-source', 'is-random-scroll-candidate');
-    });
-  }
-
-  private setRandomScrollCandidate(catalogIndex: number): void {
-    const catalog = this.customLoader.getCatalog();
-    const entry = catalog[catalogIndex];
-    if (!entry) return;
-
-    this.overlay.querySelectorAll('.folder-song-item').forEach((item) => {
-      const idx = Number((item as HTMLElement).dataset.listIndex);
-      const active = idx === catalogIndex;
-      item.classList.toggle('is-random-scroll-candidate', active);
-      item.classList.toggle('is-selected', false);
-    });
-
-    const el = this.overlay.querySelector(
-      `.folder-song-item[data-list-index="${catalogIndex}"]`,
-    ) as HTMLElement | null;
-    if (el) this.scrollSongBandCardIntoView(el, 'auto');
-  }
-
-  private async animateRandomPickRoulette(
-    fromIndex: number,
-    toIndex: number,
-    gen: number,
-  ): Promise<boolean> {
-    const catalog = this.customLoader.getCatalog();
-    const rows = sortFolderCatalog(
-      catalog,
-      this.folderSongSort,
-      (track) => this.folderTrackSortMeta(track),
-    );
-    const catalogIndices = rows.map((row) => row.catalogIndex);
-    const steps = buildRandomPickRouletteSteps(catalogIndices, fromIndex, toIndex);
-    const total = Math.max(steps.length - 1, 1);
-
-    this.setRandomPickFx(t('ui.randomPickSpinning'), 'spin');
-    await this.playRandomPickRoulette();
-
-    let aborted = false;
-    try {
-      const finalIndex = steps[steps.length - 1];
-      for (let i = 0; i < steps.length; i++) {
-        if (gen !== this.randomPickGen || this.screenId !== 'select') {
-          aborted = true;
-          return false;
-        }
-        this.setRandomScrollCandidate(steps[i]);
-        const delay = i < steps.length - 1
-          ? randomRouletteStepDelay(i, total)
-          : RANDOM_PICK_ROULETTE_STOP_MS;
-        await this.sleep(delay);
-      }
-
-      this.overlay.querySelectorAll('.folder-song-item').forEach((item) => {
-        item.classList.remove('is-random-scroll-candidate');
-      });
-      this.focusRandomPickSong(finalIndex);
-
-      return gen === this.randomPickGen && this.screenId === 'select';
-    } finally {
-      if (aborted) this.stopRandomPickRoulette();
-    }
-  }
-
-  private focusRandomPickSong(catalogIndex: number): void {
-    const catalog = this.customLoader.getCatalog();
-    const entry = catalog[catalogIndex];
-    if (!entry) return;
-
-    this.overlay.querySelectorAll('.folder-song-item').forEach((item) => {
-      const idx = Number((item as HTMLElement).dataset.listIndex);
-      const active = idx === catalogIndex;
-      item.classList.toggle('is-selected', active);
-    });
-
-    const el = this.overlay.querySelector(
-      `.folder-song-item[data-list-index="${catalogIndex}"]`,
-    ) as HTMLElement | null;
-    if (el) this.scrollSongBandCardIntoView(el, 'auto');
-    this.setRingCenterTitle(entry.title);
-    this.flashBandCardDecide(el);
-  }
-
-  private async flashRandomPickCenter(): Promise<void> {
-    const center = this.overlay.querySelector('#song-ring-center');
-    center?.classList.remove('is-random-pick-flash');
-    void (center as HTMLElement | undefined)?.offsetWidth;
-    center?.classList.add('is-random-pick-flash');
-    await this.sleep(RANDOM_PICK_FLASH_MS);
-    center?.classList.remove('is-random-pick-flash');
-  }
-
-  private async animateRandomPickFlyToCenter(
-    catalogIndex: number,
-    gen: number,
-  ): Promise<boolean> {
-    const catalog = this.customLoader.getCatalog();
-    const entry = catalog[catalogIndex];
-    if (!entry) return false;
-
-    const listItem = this.overlay.querySelector(
-      `.folder-song-item[data-list-index="${catalogIndex}"]`,
-    ) as HTMLElement | null;
-    const center = this.overlay.querySelector('#song-ring-center') as HTMLElement | null;
-
-    if (!listItem || !center) {
-      this.focusRandomPickSong(catalogIndex);
-      await this.flashRandomPickCenter();
-      return gen === this.randomPickGen && this.screenId === 'select';
-    }
-
-    this.scrollSongBandCardIntoView(listItem, 'auto');
-    await this.sleep(16);
-    if (gen !== this.randomPickGen || this.screenId !== 'select') return false;
-
-    const from = listItem.getBoundingClientRect();
-    const to = center.getBoundingClientRect();
-    const fromCx = from.left + from.width / 2;
-    const fromCy = from.top + from.height / 2;
-    const panelCx = to.left + to.width / 2;
-    const panelCy = to.top + to.height / 2;
-
-    this.removeRandomPickFlyClone();
-    listItem.classList.add('is-random-pick-source');
-
-    const screen = this.overlay.querySelector('#select-hub-screen');
-    screen?.classList.add('is-random-pick-fly');
-
-    const clone = document.createElement('div');
-    clone.className = 'random-pick-fly-clone';
-    clone.innerHTML = `
-      <div class="random-pick-fly-clone-inner">
-        <p class="random-pick-fly-clone-title">${this.escapeHtml(entry.title)}</p>
-      </div>
-    `;
-    clone.style.width = `${from.width}px`;
-    clone.style.height = `${from.height}px`;
-    clone.style.minWidth = `${from.width}px`;
-    clone.style.maxWidth = `${from.width}px`;
-    clone.style.minHeight = `${from.height}px`;
-    const flyLayer = this.getRandomPickFlyLayer();
-    if (!flyLayer) {
-      listItem.classList.remove('is-random-pick-source');
-      screen?.classList.remove('is-random-pick-fly');
-      return false;
-    }
-    flyLayer.appendChild(clone);
-
-    const waitAnim = (anim: Animation) => new Promise<void>((resolve) => {
-      anim.onfinish = () => resolve();
-      anim.oncancel = () => resolve();
-    });
-
-    await waitAnim(clone.animate([
-      {
-        transform: `translate(${fromCx}px, ${fromCy}px) translate(-50%, -50%) scale(1, 1)`,
-        opacity: 1,
-      },
-      {
-        transform: `translate(${panelCx}px, ${panelCy}px) translate(-50%, -50%) scale(1, 1)`,
-        opacity: 1,
-      },
-    ], {
-      duration: RANDOM_PICK_FLY_MS,
-      easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
-      fill: 'forwards',
-    }));
-
-    if (gen !== this.randomPickGen || this.screenId !== 'select') {
-      this.removeRandomPickFlyClone();
-      listItem.classList.remove('is-random-pick-source');
-      screen?.classList.remove('is-random-pick-fly');
-      return false;
-    }
-
-    const panel = center.getBoundingClientRect();
-    const endCx = panel.left + panel.width / 2;
-    const endCy = panel.top + panel.height / 2;
-    const endScaleX = panel.width / Math.max(from.width, 1);
-    const endScaleY = panel.height / Math.max(from.height, 1);
-
-    clone.classList.add('random-pick-fly-clone--landing');
-
-    await waitAnim(clone.animate([
-      {
-        transform: `translate(${endCx}px, ${endCy}px) translate(-50%, -50%) scale(1, 1)`,
-        opacity: 1,
-        filter: 'brightness(1)',
-      },
-      {
-        transform: `translate(${endCx}px, ${endCy}px) translate(-50%, -50%) scale(${endScaleX}, ${endScaleY})`,
-        opacity: 1,
-        filter: 'brightness(1.65)',
-      },
-    ], {
-      duration: RANDOM_PICK_EXPAND_MS,
-      easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
-      fill: 'forwards',
-    }));
-
-    center.classList.add('is-random-pick-flash');
-    void center.offsetWidth;
-
-    this.removeRandomPickFlyClone();
-    listItem.classList.remove('is-random-pick-source');
-    screen?.classList.remove('is-random-pick-fly');
-
-    if (gen !== this.randomPickGen || this.screenId !== 'select') return false;
-
-    return gen === this.randomPickGen && this.screenId === 'select';
-  }
-
-  private async waitRandomPickAutoStart(gen: number): Promise<boolean> {
-    await this.sleep(RANDOM_PICK_AUTO_START_MS);
-    return gen === this.randomPickGen && this.screenId === 'select';
-  }
-
   private async startRandomFolderChart(): Promise<void> {
-    if (this.screenId !== 'select') return;
-    if (!this.canRandomFolderPlay() || this.isSelectHubRingLoading() || this.randomPickActive) return;
-
-    const catalog = this.customLoader.getCatalog();
-    const current = this.customLoader.getSelectedIndex();
-    const finalIndex = pickRandomCatalogIndex(catalog.length, current);
-    const gen = ++this.randomPickGen;
-
-    this.randomPickActive = true;
-    this.randomPickLocked = false;
-    this.syncRandomPickLockUi();
-    this.unbindCustomRingNavigation();
-    this.audio.stopPreviewPlayback();
-
-    let completed = false;
-    try {
-      await this.ensureRandomPickAudio();
-
-      const loadPromise = this.loadSelectHubTrack(finalIndex, { silent: true });
-
-      const rouletted = await this.animateRandomPickRoulette(current, finalIndex, gen);
-      if (!rouletted) return;
-
-      this.setRandomPickFx('', 'hidden');
-      const flew = await this.animateRandomPickFlyToCenter(finalIndex, gen);
-      if (!flew) return;
-
-      await loadPromise;
-      if (gen !== this.randomPickGen || this.screenId !== 'select' || this.isSelectHubRingLoading()) return;
-
-      const chart = this.selectedChart;
-      if (!chart || chart.notes.length === 0) return;
-
-      this.randomPickActive = false;
-      this.randomPickLocked = true;
-      const screen = this.overlay.querySelector('#select-hub-screen');
-      screen?.classList.remove('is-random-pick-active');
-      screen?.classList.add('is-random-pick-locked');
-      this.syncRandomPlayButton();
-
-      const revealed = await this.revealRandomPickDecision(gen, finalIndex);
-      if (!revealed) return;
-
-      const ready = await this.waitRandomPickAutoStart(gen);
-      if (!ready) return;
-
-      this.setRandomPickFx('', 'hidden');
-      this.overlay.querySelector('#song-ring-center')?.classList.remove('is-random-pick-locked-panel');
-      this.skipNextGameCountdown = true;
-      this.startSelectedChart();
-      completed = true;
-    } finally {
-      if (!completed && gen === this.randomPickGen) {
-        this.resetRandomPickState();
-        if (this.screenId === 'select' && this.customLoader.isFolderMode()) {
-          this.bindSelectHubRing();
-        }
-      }
-    }
+    await this.randomPick.start();
   }
 
   private startSelectedChart(): void {

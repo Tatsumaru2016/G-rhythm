@@ -5,7 +5,7 @@ import {
   getGenreChartModifiers,
   type GenreChartModifiers,
 } from './musicGenre';
-import { tDifficultyHint } from '../i18n';
+import { detectOnsets, type AudioOnset } from './onsetDetection';
 
 export type CustomDifficulty = 'EASY' | 'NORMAL' | 'HARD' | 'EXTREME';
 
@@ -76,16 +76,9 @@ const DIFFICULTY_CONFIG: Record<CustomDifficulty, DifficultyConfig> = {
   },
 };
 
-export function getCustomDifficultyHint(difficulty: CustomDifficulty): string {
-  return tDifficultyHint(difficulty);
+export function estimateBpm(buffer: AudioBuffer): number {
+  return analyzeGenre(buffer).features.bpm;
 }
-
-const DIFFICULTY_HUD_COLORS: Record<string, string> = {
-  easy: '#00ff88',
-  normal: '#00e5ff',
-  hard: '#ffd700',
-  extreme: '#ff2d6a',
-};
 
 export function formatChartDifficultyLabel(difficulty: string): string {
   return difficulty.toUpperCase();
@@ -93,48 +86,6 @@ export function formatChartDifficultyLabel(difficulty: string): string {
 
 export function difficultyCssClass(difficulty: string): string {
   return difficulty.toLowerCase();
-}
-
-export function difficultyHudColor(difficulty: string): string {
-  return DIFFICULTY_HUD_COLORS[difficulty.toLowerCase()] ?? '#00e5ff';
-}
-
-interface Onset {
-  time: number;
-  energy: number;
-}
-
-export function estimateBpm(buffer: AudioBuffer): number {
-  return analyzeGenre(buffer).features.bpm;
-}
-
-export function detectOnsets(buffer: AudioBuffer, minGap: number, fluxScale = 1): Onset[] {
-  const data = buffer.getChannelData(0);
-  const sampleRate = buffer.sampleRate;
-  const windowSize = Math.floor(sampleRate * 0.023);
-  const onsets: Onset[] = [];
-  let prevEnergy = 0;
-  let lastOnset = -minGap;
-  const fluxThreshold = 0.008 * fluxScale;
-  const energyThreshold = 0.015 * fluxScale;
-
-  for (let i = 0; i < data.length; i += windowSize) {
-    let energy = 0;
-    const end = Math.min(i + windowSize, data.length);
-    for (let j = i; j < end; j++) energy += data[j] * data[j];
-    energy = Math.sqrt(energy / (end - i));
-
-    const flux = Math.max(0, energy - prevEnergy);
-    const time = i / sampleRate;
-
-    if (flux > fluxThreshold && energy > energyThreshold && time - lastOnset >= minGap) {
-      onsets.push({ time, energy });
-      lastOnset = time;
-    }
-    prevEnergy = energy * 0.85 + prevEnergy * 0.15;
-  }
-
-  return onsets;
 }
 
 function quantizeToBeat(time: number, bpm: number, offset: number, lpb: number): number {
@@ -179,7 +130,7 @@ function pickChordLanes(baseLane: LaneIndex, maxLanes: number): LaneIndex[] {
 function notesAtBeat(
   beat: number,
   lane: LaneIndex,
-  onset: Onset,
+  onset: AudioOnset,
   cfg: DifficultyConfig,
 ): ChartNote[] {
   const onHoldGrid = beat % cfg.holdBeatMod === 0;

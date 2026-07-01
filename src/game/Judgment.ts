@@ -95,14 +95,6 @@ export function getJudgmentLabel(type: JudgmentType): string {
   return tJudgment(type);
 }
 
-/** @deprecated use getJudgmentLabel() */
-export const JUDGMENT_LABELS: Record<JudgmentType, string> = {
-  perfect: 'PERFECT',
-  great: 'GREAT',
-  good: 'GOOD',
-  bad: 'BAD',
-  miss: 'MISS',
-};
 export const JUDGMENT_COLORS: Record<JudgmentType, string> = {
   perfect: '#00ffff',
   great: '#7fff00',

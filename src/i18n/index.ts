@@ -83,10 +83,6 @@ export function formatNotesCount(count: number): string {
   return t('ui.notes', { count });
 }
 
-export function formatLevel(count: number): string {
-  return t('ui.level', { level: count });
-}
-
 export function formatChartBpm(bpm: number): string {
   const rounded = Math.round(bpm * 10) / 10;
   const text = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);

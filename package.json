@@ -7,13 +7,19 @@
     "dev": "vite",
     "build": "vite build",
     "build:check": "tsc && npm run build",
+    "test": "vitest run",
+    "lint": "eslint src",
     "sync:charts": "tsx scripts/sync-builtin-charts.ts",
     "preview": "vite preview"
   },
   "devDependencies": {
+    "@eslint/js": "^9.21.0",
     "audio-decode": "^3.11.0",
+    "eslint": "^9.21.0",
     "tsx": "^4.22.4",
     "typescript": "^5.7.2",
-    "vite": "^6.0.3"
+    "typescript-eslint": "^8.25.0",
+    "vite": "^6.0.3",
+    "vitest": "^3.0.7"
   }
 }
