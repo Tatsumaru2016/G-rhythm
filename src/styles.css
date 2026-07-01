@@ -547,6 +547,20 @@ body.reduced-flash .btn-select-random {
   animation: fadeIn 0.5s ease;
 }
 
+/* フルスクリーン画面は .screen の幅制限を無効化（styles.css が title.css より後に読み込まれるため） */
+.screen.title-screen,
+.screen.select-hub-screen,
+.screen.result-screen {
+  max-width: none;
+  width: 100%;
+  flex: 1 1 auto;
+  align-self: stretch;
+}
+
+.screen.title-screen {
+  padding: 0;
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;

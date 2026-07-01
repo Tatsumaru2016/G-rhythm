@@ -16,6 +16,17 @@ import {
   type SongSortSettings,
 } from '../settings/songSort';
 import { formatScrollSpeed, MIN_SCROLL_SPEED, MAX_SCROLL_SPEED } from '../settings/scrollSpeed';
+import {
+  formatDisplayTiming,
+  MIN_DISPLAY_TIMING,
+  MAX_DISPLAY_TIMING,
+  DISPLAY_TIMING_STEP,
+} from '../settings/displayTiming';
+import {
+  LANE_BACKGROUND_IDS,
+  laneBackgroundI18nKey,
+  type LaneBackgroundId,
+} from '../game/laneBackground';
 import { sortBuiltinIndices } from '../data/builtinCatalogSort';
 import { renderChartLevelHtml, renderSongChartAnalysisHtml } from './chartRadarView';
 import { renderChartBestGradeBadge } from './bestGradeView';
@@ -34,6 +45,8 @@ export interface SelectHubViewState {
   customBpm: number;
   customOffset: number;
   scrollSpeed: number;
+  displayTiming: number;
+  laneBackground: LaneBackgroundId;
   builtinSongSort: SongSortSettings;
   folderSongSort: SongSortSettings;
   customFolderName: string;
@@ -224,6 +237,22 @@ function selectHubPlaySettingsRowsHtml(state: SelectHubViewState): string {
           min="${MIN_SCROLL_SPEED * 100}" max="${MAX_SCROLL_SPEED * 100}" step="5"
           value="${Math.round(state.scrollSpeed * 100)}" />
         <span class="select-hub-settings-value" id="speed-value">${formatScrollSpeed(state.scrollSpeed)}</span>
+      </label>
+      <label class="select-hub-settings-row select-hub-settings-row--slider">
+        <span class="select-hub-settings-label">${withTooltip(t('settings.displayTiming'), t('settings.displayTimingHint'))}</span>
+        <input type="range" id="display-timing-slider"
+          min="${MIN_DISPLAY_TIMING}" max="${MAX_DISPLAY_TIMING}" step="${DISPLAY_TIMING_STEP}"
+          value="${state.displayTiming}" />
+        <span class="select-hub-settings-value" id="display-timing-value">${formatDisplayTiming(state.displayTiming)}</span>
+      </label>
+      <label class="select-hub-settings-row select-hub-settings-row--select">
+        <span class="select-hub-settings-label">${withTooltip(t('settings.laneBackground'), t('settings.laneBackgroundHint'))}</span>
+        <select id="lane-background-select" class="select-hub-settings-select">
+          ${LANE_BACKGROUND_IDS.map(
+            (id) =>
+              `<option value="${id}"${state.laneBackground === id ? ' selected' : ''}>${t(laneBackgroundI18nKey(id))}</option>`,
+          ).join('')}
+        </select>
       </label>
     `;
 }

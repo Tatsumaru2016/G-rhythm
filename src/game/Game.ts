@@ -27,6 +27,7 @@ import {
 } from './Judgment';
 import { InputManager } from './InputManager';
 import { Renderer } from './Renderer';
+import type { LaneBackgroundId } from './laneBackground';
 import { ParticleSystem } from './ParticleSystem';
 import { AudioEngine } from '../audio/AudioEngine';
 
@@ -145,6 +146,14 @@ export class Game {
 
   setScrollSpeed(multiplier: number) {
     this.renderer.setScrollSpeed(multiplier);
+  }
+
+  setDisplayTiming(value: number) {
+    this.renderer.setDisplayTiming(value);
+  }
+
+  setLaneBackground(id: LaneBackgroundId) {
+    this.renderer.setLaneBackground(id);
   }
 
   setReducedFlash(enabled: boolean) {

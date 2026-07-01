@@ -1745,6 +1745,32 @@ body.reduced-flash .song-band-card.is-band-decide-flash::after {
   cursor: default;
 }
 
+.select-hub-settings-row--select {
+  flex-wrap: wrap;
+  row-gap: 0.34rem;
+}
+
+.select-hub-settings-select {
+  flex: 1 1 8.5rem;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0.28rem 0.45rem;
+  font-family: 'Orbitron', sans-serif;
+  font-size: clamp(0.72rem, 2vw, 0.88rem);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--hub-settings-text);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(0, 229, 255, 0.35);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.select-hub-settings-select:focus-visible {
+  outline: 2px solid rgba(0, 229, 255, 0.65);
+  outline-offset: 2px;
+}
+
 .select-hub-settings-label {
   flex: 0 0 auto;
   margin: 0;

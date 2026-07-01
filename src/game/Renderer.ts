@@ -22,12 +22,19 @@ import {
 } from './danceGauge';
 import type { AudioReactive } from '../audio/AudioEngine';
 import { DEFAULT_SCROLL_SPEED } from '../settings/scrollSpeed';
+import { DEFAULT_DISPLAY_TIMING, clampDisplayTiming } from '../settings/displayTiming';
+import { judgmentLineY, stepZoneBottom, stepZoneTop } from './stepZone';
 import { isPlayStageDecorFxEnabled } from '../settings/playStageFx';
 import { getSongPhase, PHASE_BACKGROUND_THEMES, type SongPhase } from './scrollPhase';
 import { getMilestoneSublabel, t, tFreezeJudgment, type FreezeJudgment } from '../i18n';
 import { getJudgmentLabel } from './Judgment';
 import { drawPlayHud } from './playHudRenderer';
 import { ACCURACY_MILESTONE_STYLE, type AccuracyTier } from './accuracyMilestone';
+import {
+  drawLaneBackground,
+  DEFAULT_LANE_BACKGROUND,
+  type LaneBackgroundId,
+} from './laneBackground';
 
 interface LaneGlow {
   intensity: number;
@@ -97,6 +104,8 @@ export class Renderer {
   private displayedDanceGauge = DANCE_GAUGE_START;
   private gaugeDamageFx: GaugeDamageFx | null = null;
   private scrollSpeed = DEFAULT_SCROLL_SPEED;
+  private displayTiming = DEFAULT_DISPLAY_TIMING;
+  private laneBackground: LaneBackgroundId = DEFAULT_LANE_BACKGROUND;
   private songDuration = 0;
   private reducedFlash = false;
   private screen: ScreenEffect = { shake: 0, perfectPulse: 0, missFlash: 0 };
@@ -157,8 +166,24 @@ export class Renderer {
       topY: this.laneTopY,
       width: this.laneWidth * 4,
       bottomY: this.laneBottomY,
-      hitLineY: this.hitLineY,
+      hitLineY: this.getJudgmentLineY(),
     };
+  }
+
+  private getStepZoneHeight(): number {
+    return this.noteHeight;
+  }
+
+  private getJudgmentLineY(): number {
+    return judgmentLineY(this.hitLineY, this.getStepZoneHeight(), this.displayTiming);
+  }
+
+  private getStepZoneTopY(): number {
+    return stepZoneTop(this.hitLineY, this.getStepZoneHeight());
+  }
+
+  private getStepZoneBottomY(): number {
+    return stepZoneBottom(this.hitLineY, this.getStepZoneHeight());
   }
 
   resize() {
@@ -208,7 +233,7 @@ export class Renderer {
       laneStartX: this.laneStartX,
       laneWidth: this.laneWidth,
       topY: this.laneTopY,
-      hitLineY: this.hitLineY,
+      hitLineY: this.getStepZoneBottomY(),
     };
   }
 
@@ -217,11 +242,19 @@ export class Renderer {
   }
 
   getHitLineY(): number {
-    return this.hitLineY;
+    return this.getJudgmentLineY();
   }
 
   setScrollSpeed(multiplier: number): void {
     this.scrollSpeed = multiplier;
+  }
+
+  setDisplayTiming(value: number): void {
+    this.displayTiming = clampDisplayTiming(value);
+  }
+
+  setLaneBackground(id: LaneBackgroundId): void {
+    this.laneBackground = id;
   }
 
   setSongDuration(duration: number): void {
@@ -313,7 +346,7 @@ export class Renderer {
   }
 
   getApproachTime(currentTime = 0): number {
-    const travel = this.hitLineY - this.laneTopY;
+    const travel = this.getJudgmentLineY() - this.laneTopY;
     const speed = this.getNoteSpeed(currentTime);
     if (travel <= 0 || speed <= 0)
       return BASE_APPROACH_TIME / this.getEffectiveScrollMultiplier(currentTime);
@@ -326,7 +359,7 @@ export class Renderer {
 
   private noteY(currentTime: number, noteTime: number): number {
     const diff = noteTime - currentTime;
-    return this.hitLineY - diff * this.getNoteSpeed(currentTime);
+    return this.getJudgmentLineY() - diff * this.getNoteSpeed(currentTime);
   }
 
   private isInApproachWindow(currentTime: number, noteTime: number): boolean {
@@ -631,8 +664,9 @@ export class Renderer {
     if (decorFx) {
       particles.draw(ctx);
     }
+    this.drawStepZone();
     this.drawNotes(notes, currentTime);
-    this.drawHitLine();
+    this.drawJudgmentMarker();
     if (this.playfieldActive && decorFx && playfieldStress.stress >= 1) {
       this.drawPlayfieldStressHitBand(playfieldStress);
     }
@@ -736,6 +770,19 @@ export class Renderer {
   private drawLanes() {
     const ctx = this.ctx;
     const laneBottom = this.laneBottomY;
+
+    drawLaneBackground(ctx, {
+      id: this.laneBackground,
+      layout: {
+        laneStartX: this.laneStartX,
+        laneTopY: this.laneTopY,
+        laneBottomY: laneBottom,
+        laneWidth: this.laneWidth,
+      },
+      time: this.time,
+      reducedFlash: this.reducedFlash,
+    });
+
     const { stress, severity, pulse } = this.getPlayfieldStressMetrics(this.lastDanceGauge);
     const danger = stress >= 2;
     const warning = stress === 1;
@@ -979,7 +1026,7 @@ export class Renderer {
       const color = LANE_COLORS[note.lane];
       const left = this.laneLeft(note.lane);
       const w = this.laneWidth;
-      const tailCy = note.holding ? this.hitLineY : endY;
+      const tailCy = note.holding ? this.getJudgmentLineY() : endY;
       const headBottom = startY + h / 2;
       const tailTop = tailCy - h / 2;
       const bodyTop = Math.min(headBottom, tailTop);
@@ -1119,7 +1166,7 @@ export class Renderer {
         const endY = this.noteY(currentTime, note.endTime);
         if (Math.max(startY, endY) < visibleTop || Math.min(startY, endY) > visibleBottom) continue;
 
-        const tailCy = note.holding ? this.hitLineY : endY;
+        const tailCy = note.holding ? this.getJudgmentLineY() : endY;
 
         if (!note.hit) {
           this.drawTapNote(
@@ -1324,10 +1371,58 @@ export class Renderer {
     ctx.restore();
   }
 
-  private drawHitLine() {
+  private drawStepZone() {
+    const ctx = this.ctx;
+    const h = this.getStepZoneHeight();
+    const top = this.getStepZoneTopY();
+    const { stress, severity, pulse } = this.getPlayfieldStressMetrics(this.lastDanceGauge);
+    const danger = stress >= 2;
+    const warning = stress === 1;
+    const stressMix = this.reducedFlash ? severity * 0.35 : severity;
+    const basePulse = 0.7 + 0.3 * Math.sin(this.time * 4) + this.screen.perfectPulse * 0.3;
+    const stressPulse =
+      stress >= 1 ? basePulse * (0.72 + 0.28 * pulse) * (1 + stressMix * 0.35) : basePulse;
+
+    ctx.save();
+    for (let i = 0; i < 4; i++) {
+      const left = this.laneLeft(i as LaneIndex);
+      const w = this.laneWidth;
+      const color = LANE_COLORS[i];
+      const cx = left + w / 2;
+      const cy = top + h / 2;
+
+      ctx.fillStyle = `rgba(0,0,0,${danger ? 0.42 : warning ? 0.36 : 0.3})`;
+      ctx.fillRect(left + 4, top, w - 8, h);
+
+      const receptorGrad = ctx.createLinearGradient(left, top, left + w, top + h);
+      receptorGrad.addColorStop(0, this.blendHex(color, 0.35));
+      receptorGrad.addColorStop(0.5, this.blendHex(color, 0.55));
+      receptorGrad.addColorStop(1, this.blendHex(color, 0.35));
+      ctx.fillStyle = receptorGrad;
+      ctx.globalAlpha = 0.22 * stressPulse;
+      ctx.fillRect(left + 4, top, w - 8, h);
+      ctx.globalAlpha = 1;
+
+      ctx.strokeStyle = `rgba(255,255,255,${(danger ? 0.55 : warning ? 0.48 : 0.42) * stressPulse})`;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(left + 4, top, w - 8, h);
+
+      const fontSize = Math.max(14, Math.min(28, w * 0.42));
+      ctx.font = `700 ${fontSize}px Orbitron, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = `rgba(255,255,255,${0.38 * stressPulse})`;
+      ctx.fillText(LANE_ARROW_LABELS[i], cx, cy);
+    }
+    ctx.restore();
+  }
+
+  private drawJudgmentMarker() {
     const ctx = this.ctx;
     const left = this.laneStartX;
     const right = this.laneStartX + this.laneWidth * 4;
+    const judgmentY = this.getJudgmentLineY();
+    const zoneCenterY = this.hitLineY;
     const { stress, severity, pulse } = this.getPlayfieldStressMetrics(this.lastDanceGauge);
     const danger = stress >= 2;
     const warning = stress === 1;
@@ -1349,22 +1444,29 @@ export class Renderer {
         : 255;
     const glowColor = danger ? '#ff3355' : warning ? '#ff8833' : '#00ffff';
 
+    ctx.save();
+    if (Math.abs(this.displayTiming) >= 0.05) {
+      ctx.setLineDash([6, 6]);
+      ctx.strokeStyle = `rgba(255,255,255,${0.22 * stressPulse})`;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(left, zoneCenterY);
+      ctx.lineTo(right, zoneCenterY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
     ctx.shadowColor = glowColor;
-    ctx.shadowBlur = (danger ? 32 : warning ? 24 : 25) * stressPulse;
+    ctx.shadowBlur = (danger ? 24 : warning ? 18 : 16) * stressPulse;
     ctx.strokeStyle = `rgba(${lineR}, ${lineG}, ${lineB}, ${(danger ? 0.82 : warning ? 0.74 : 0.7) * stressPulse})`;
-    ctx.lineWidth = danger ? 5 + stressMix * 1.5 : warning ? 4.5 : 4;
+    ctx.lineWidth = danger ? 3.5 : warning ? 3 : 2.5;
     ctx.beginPath();
-    ctx.moveTo(left, this.hitLineY);
-    ctx.lineTo(right, this.hitLineY);
+    ctx.moveTo(left, judgmentY);
+    ctx.lineTo(right, judgmentY);
     ctx.stroke();
 
-    const bandH = danger ? 56 : warning ? 48 : 40;
-    const lineGrad = ctx.createLinearGradient(
-      left,
-      this.hitLineY - bandH,
-      left,
-      this.hitLineY + bandH,
-    );
+    const bandH = this.getStepZoneHeight() * 0.5;
+    const lineGrad = ctx.createLinearGradient(left, judgmentY - bandH, left, judgmentY + bandH);
     lineGrad.addColorStop(0, 'rgba(0,0,0,0)');
     lineGrad.addColorStop(
       0.5,
@@ -1376,8 +1478,9 @@ export class Renderer {
     );
     lineGrad.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = lineGrad;
-    ctx.fillRect(left, this.hitLineY - bandH, right - left, bandH * 2);
+    ctx.fillRect(left, judgmentY - bandH, right - left, bandH * 2);
     ctx.shadowBlur = 0;
+    ctx.restore();
   }
 
   private drawHoldLaneFeedback(notes: ActiveNote[], currentTime: number) {
@@ -1402,19 +1505,21 @@ export class Renderer {
       ctx.shadowBlur = 10 + urgency * 22;
       ctx.strokeStyle = `rgba(255,255,255,${(0.2 + urgency * 0.5) * pulse})`;
       ctx.lineWidth = 2 + urgency * 2.5;
-      ctx.strokeRect(left + 5, this.hitLineY - 20, w - 10, 40);
+      const zoneTop = this.getStepZoneTopY();
+      const zoneH = this.getStepZoneHeight();
+      ctx.strokeRect(left + 5, zoneTop, w - 10, zoneH);
 
-      const beamGrad = ctx.createLinearGradient(0, this.hitLineY - 50, 0, this.hitLineY + 8);
+      const beamGrad = ctx.createLinearGradient(0, zoneTop - 30, 0, zoneTop + zoneH);
       beamGrad.addColorStop(0, 'rgba(255,255,255,0)');
       beamGrad.addColorStop(1, `rgba(255,255,255,${(0.06 + urgency * 0.14) * pulse})`);
       ctx.fillStyle = beamGrad;
-      ctx.fillRect(left + 8, this.hitLineY - 50, w - 16, 58);
+      ctx.fillRect(left + 8, zoneTop - 30, w - 16, zoneH + 30);
 
       if (urgency < 0.5) {
         ctx.font = '700 11px "Noto Sans JP", sans-serif';
         ctx.textAlign = 'center';
         ctx.fillStyle = `rgba(255,255,255,${0.62 * pulse})`;
-        ctx.fillText(t('game.keepHold'), cx, this.hitLineY - 30);
+        ctx.fillText(t('game.keepHold'), cx, zoneTop - 12);
       } else {
         ctx.font = '700 13px "Noto Sans JP", Orbitron, sans-serif';
         ctx.textAlign = 'center';
@@ -1422,7 +1527,7 @@ export class Renderer {
         ctx.shadowColor = '#ffd700';
         ctx.shadowBlur = 12 + urgency * 10;
         const bounce = Math.sin(this.time * 18) * urgency * 4;
-        ctx.fillText(t('game.releaseUp'), cx, this.hitLineY - 32 + bounce);
+        ctx.fillText(t('game.releaseUp'), cx, zoneTop - 14 + bounce);
       }
 
       ctx.restore();
@@ -1764,8 +1869,8 @@ export class Renderer {
     const mix = this.reducedFlash ? severity * 0.35 : severity;
     const left = this.laneStartX;
     const right = this.laneStartX + this.laneWidth * 4;
-    const y = this.hitLineY;
-    const bandH = danger ? 72 : 58;
+    const y = this.getJudgmentLineY();
+    const bandH = this.getStepZoneHeight();
 
     ctx.save();
     ctx.beginPath();

@@ -8,6 +8,18 @@ export const MESSAGES = {
     'settings.reducedFlashHint': '背景演出・画面揺れを抑えます',
     'settings.scrollSpeed': 'スクロール速度',
     'settings.scrollSpeedHint': 'ノーツの落ちる速さ（0.5x〜2.0x）',
+    'settings.displayTiming': '表示タイミング',
+    'settings.displayTimingHint':
+      'ノーツの表示位置を調整。SLOWが多い→マイナス、FASTが多い→プラス',
+    'settings.laneBackground': 'レーン背景',
+    'settings.laneBackgroundHint':
+      'プレイ中の4レーン背景。カスタム画像は1レーン98×512px（4レーン一括392×512px）推奨',
+    'settings.laneBg.classic': 'クラシック',
+    'settings.laneBg.neonPlasma': 'ネオンプラズマ',
+    'settings.laneBg.psychedelicSwirl': 'サイケスワール',
+    'settings.laneBg.deepCosmos': 'ディープコスモス',
+    'settings.laneBg.acidWave': 'アシッドウェーブ',
+    'settings.laneBg.prismScan': 'プリズムスキャン',
     'settings.offset': 'OFFSET (秒)',
 
     'debug.fxPattern': '背景演出（デバッグ）',
@@ -155,6 +167,18 @@ export const MESSAGES = {
     'settings.reducedFlashHint': 'Reduces background effects and screen shake',
     'settings.scrollSpeed': 'Scroll speed',
     'settings.scrollSpeedHint': 'Note fall speed (0.5x–2.0x)',
+    'settings.displayTiming': 'Display timing',
+    'settings.displayTimingHint':
+      'Shift note visuals. Many SLOW → minus; many FAST → plus',
+    'settings.laneBackground': 'Lane background',
+    'settings.laneBackgroundHint':
+      '4-lane playfield look. Custom tiles: 98×512 px per lane (392×512 px strip)',
+    'settings.laneBg.classic': 'Classic',
+    'settings.laneBg.neonPlasma': 'Neon plasma',
+    'settings.laneBg.psychedelicSwirl': 'Psychedelic swirl',
+    'settings.laneBg.deepCosmos': 'Deep cosmos',
+    'settings.laneBg.acidWave': 'Acid wave',
+    'settings.laneBg.prismScan': 'Prism scan',
     'settings.offset': 'OFFSET (sec)',
 
     'debug.fxPattern': 'Background FX (debug)',

@@ -27,6 +27,16 @@ import {
   MAX_SCROLL_SPEED,
 } from '../settings/scrollSpeed';
 import {
+  loadDisplayTiming,
+  saveDisplayTiming,
+  formatDisplayTiming,
+  MIN_DISPLAY_TIMING,
+  MAX_DISPLAY_TIMING,
+  DISPLAY_TIMING_STEP,
+} from '../settings/displayTiming';
+import { loadLaneBackground, saveLaneBackground } from '../settings/laneBackground';
+import type { LaneBackgroundId } from '../game/laneBackground';
+import {
   DEFAULT_REDUCED_FLASH,
   loadReducedFlash,
   saveReducedFlash,
@@ -127,6 +137,8 @@ export class UIManager {
   private customMusicPickerOpen = false;
   private nativeFolderPickActive = false;
   private scrollSpeed = loadScrollSpeed();
+  private displayTiming = loadDisplayTiming();
+  private laneBackground = loadLaneBackground();
   private reducedFlash = DEFAULT_REDUCED_FLASH;
   private titleSoundEnabled = loadTitleSound();
   private stageFxPattern = DEFAULT_STAGE_FX_PATTERN;
@@ -248,6 +260,14 @@ export class UIManager {
 
   getScrollSpeed(): number {
     return this.scrollSpeed;
+  }
+
+  getDisplayTiming(): number {
+    return this.displayTiming;
+  }
+
+  getLaneBackground(): LaneBackgroundId {
+    return this.laneBackground;
   }
 
   getReducedFlash(): boolean {
@@ -472,6 +492,24 @@ export class UIManager {
     });
   }
 
+  private bindDisplayTimingControl() {
+    const slider = this.overlay.querySelector('#display-timing-slider') as HTMLInputElement;
+    slider?.addEventListener('input', () => {
+      this.displayTiming = Number(slider.value);
+      saveDisplayTiming(this.displayTiming);
+      const el = this.overlay.querySelector('#display-timing-value');
+      if (el) el.textContent = formatDisplayTiming(this.displayTiming);
+    });
+  }
+
+  private bindLaneBackgroundControl() {
+    const select = this.overlay.querySelector('#lane-background-select') as HTMLSelectElement;
+    select?.addEventListener('change', () => {
+      this.laneBackground = select.value as LaneBackgroundId;
+      saveLaneBackground(this.laneBackground);
+    });
+  }
+
   private unbindTitleNavigation() {
     if (this.titleKeyHandler) {
       window.removeEventListener('keydown', this.titleKeyHandler, true);
@@ -605,6 +643,8 @@ export class UIManager {
       customBpm: this.customBpm,
       customOffset: this.customOffset,
       scrollSpeed: this.scrollSpeed,
+      displayTiming: this.displayTiming,
+      laneBackground: this.laneBackground,
       builtinSongSort: this.builtinSongSort,
       folderSongSort: this.folderSongSort,
       customFolderName: name,
@@ -1015,6 +1055,8 @@ export class UIManager {
 
     this.syncDifficultyPickerUi();
     this.bindScrollSpeedControl();
+    this.bindDisplayTimingControl();
+    this.bindLaneBackgroundControl();
     updateChart();
   }
 

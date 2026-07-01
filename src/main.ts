@@ -51,6 +51,8 @@ async function main() {
       await audio.resume();
       const playChart = prepareChartAudio(chart);
       init.game!.setScrollSpeed(ui.getScrollSpeed());
+      init.game!.setDisplayTiming(ui.getDisplayTiming());
+      init.game!.setLaneBackground(ui.getLaneBackground());
       init.game!.setReducedFlash(ui.getReducedFlash());
       init.game!.setDebugStageFxPattern(ui.getDebugStageFxPatternOverride());
       ui.showCountdownOverlay(playChart);
