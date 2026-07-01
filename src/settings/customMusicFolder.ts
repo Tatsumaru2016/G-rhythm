@@ -17,21 +17,27 @@ function openDb(): Promise<IDBDatabase> {
 }
 
 function idbGet<T>(key: string): Promise<T | null> {
-  return openDb().then(db => new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, 'readonly');
-    const req = tx.objectStore(STORE_NAME).get(key);
-    req.onsuccess = () => resolve((req.result as T | undefined) ?? null);
-    req.onerror = () => reject(req.error);
-  }));
+  return openDb().then(
+    (db) =>
+      new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const req = tx.objectStore(STORE_NAME).get(key);
+        req.onsuccess = () => resolve((req.result as T | undefined) ?? null);
+        req.onerror = () => reject(req.error);
+      }),
+  );
 }
 
 function idbSet(key: string, value: unknown): Promise<void> {
-  return openDb().then(db => new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, 'readwrite');
-    tx.objectStore(STORE_NAME).put(value, key);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  }));
+  return openDb().then(
+    (db) =>
+      new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        tx.objectStore(STORE_NAME).put(value, key);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      }),
+  );
 }
 
 async function ensureReadPermission(handle: FileSystemHandle): Promise<boolean> {
@@ -65,12 +71,14 @@ export async function loadLastCustomMusicFileHandle(): Promise<FileSystemFileHan
 export async function saveLastCustomMusicFileHandle(handle: FileSystemFileHandle): Promise<void> {
   try {
     await idbSet(FILE_HANDLE_KEY, handle);
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
-export async function loadLastCustomMusicFolderHandle(
-  options?: { requirePermission?: boolean },
-): Promise<FileSystemDirectoryHandle | null> {
+export async function loadLastCustomMusicFolderHandle(options?: {
+  requirePermission?: boolean;
+}): Promise<FileSystemDirectoryHandle | null> {
   try {
     const handle = await idbGet<FileSystemDirectoryHandle>(FOLDER_HANDLE_KEY);
     if (!handle || handle.kind !== 'directory') return null;
@@ -82,8 +90,12 @@ export async function loadLastCustomMusicFolderHandle(
   }
 }
 
-export async function saveLastCustomMusicFolderHandle(handle: FileSystemDirectoryHandle): Promise<void> {
+export async function saveLastCustomMusicFolderHandle(
+  handle: FileSystemDirectoryHandle,
+): Promise<void> {
   try {
     await idbSet(FOLDER_HANDLE_KEY, handle);
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }

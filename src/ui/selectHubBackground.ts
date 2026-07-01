@@ -1,5 +1,6 @@
 import { menuBackgroundFps, useLiteMenuBackground } from '../perf/webPerf';
 import { CosmicWarpBackground } from './cosmicWarpBackground';
+import { resizeMenuWarpCanvasHost } from './menuWarpCanvas';
 import { MenuCanvasLoop } from './menuCanvasLoop';
 
 const NORMAL_WARP_SPEED = 1;
@@ -68,23 +69,19 @@ export class SelectHubBackground {
   }
 
   private resize(): void {
-    if (!this.canvas || !this.host) return;
-    const rect = this.host.getBoundingClientRect();
-    const dpr = Math.min(window.devicePixelRatio || 1, this.lite ? 1.5 : 2);
-    const w = Math.max(1, rect.width);
-    const h = Math.max(1, rect.height);
-
-    this.canvas.width = Math.max(1, Math.floor(w * dpr));
-    this.canvas.height = Math.max(1, Math.floor(h * dpr));
-    this.canvas.style.width = `${w}px`;
-    this.canvas.style.height = `${h}px`;
-    this.ctx?.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (!this.canvas || !this.host || !this.ctx) return;
+    const { displayW, displayH } = resizeMenuWarpCanvasHost(
+      this.canvas,
+      this.ctx,
+      this.host,
+      this.lite,
+    );
 
     if (!this.warp) {
-      this.warp = new CosmicWarpBackground(w, h, this.particleCount());
+      this.warp = new CosmicWarpBackground(displayW, displayH, this.particleCount());
       this.warp.warpSpeedMultiplier = NORMAL_WARP_SPEED;
     } else {
-      this.warp.resize(w, h);
+      this.warp.resize(displayW, displayH);
       this.applyParticleBudget();
     }
   }

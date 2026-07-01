@@ -1,4 +1,5 @@
 import { menuBackgroundFps, useLiteMenuBackground } from '../perf/webPerf';
+import { resizeMenuWarpCanvasHost } from './menuWarpCanvas';
 import { CosmicWarpBackground } from './cosmicWarpBackground';
 import { MenuCanvasLoop } from './menuCanvasLoop';
 
@@ -61,7 +62,9 @@ export class ResultScreenBackground {
     this.initFx();
     this.resize();
     if (this.warp) {
-      this.warp.warpSpeedMultiplier = this.reducedFlash ? ENTRANCE_WARP_SPEED_REDUCED : ENTRANCE_WARP_SPEED;
+      this.warp.warpSpeedMultiplier = this.reducedFlash
+        ? ENTRANCE_WARP_SPEED_REDUCED
+        : ENTRANCE_WARP_SPEED;
     }
     window.addEventListener('resize', this.onResize);
     window.visualViewport?.addEventListener('resize', this.onResize);
@@ -105,7 +108,7 @@ export class ResultScreenBackground {
   }
 
   private initFx(): void {
-    const sparkCount = this.lite ? 28 : (this.reducedFlash ? 36 : 64);
+    const sparkCount = this.lite ? 28 : this.reducedFlash ? 36 : 64;
     this.sparks = Array.from({ length: sparkCount }, () => ({
       angle: Math.random() * Math.PI * 2,
       dist: Math.random() * 0.35,
@@ -114,7 +117,7 @@ export class ResultScreenBackground {
       hue: Math.random() * 360,
     }));
 
-    const ringCount = this.lite ? 4 : (this.reducedFlash ? 5 : 7);
+    const ringCount = this.lite ? 4 : this.reducedFlash ? 5 : 7;
     this.rings = Array.from({ length: ringCount }, (_, i) => ({
       radius: i * 0.14,
       speed: 0.16 + i * 0.028,
@@ -123,37 +126,15 @@ export class ResultScreenBackground {
     }));
   }
 
-  private viewportSize(): { w: number; h: number } {
-    const screen = this.host?.closest('.result-screen') as HTMLElement | null;
-    const rect = screen?.getBoundingClientRect() ?? this.host?.getBoundingClientRect();
-    const vv = window.visualViewport;
-    const w = Math.max(
-      1,
-      Math.ceil(rect?.width ?? 0),
-      Math.ceil(vv?.width ?? window.innerWidth),
-      Math.ceil(window.innerWidth),
-    );
-    const h = Math.max(
-      1,
-      Math.ceil(rect?.height ?? 0),
-      Math.ceil(vv?.height ?? window.innerHeight),
-      Math.ceil(window.innerHeight),
-    );
-    return { w, h };
-  }
-
   private resize(): void {
     if (!this.canvas || !this.host) return;
-    const { w: fallbackW, h: fallbackH } = this.viewportSize();
-    const displayW = Math.max(1, this.host.clientWidth || fallbackW);
-    const displayH = Math.max(1, this.host.clientHeight || fallbackH);
-    const dpr = Math.min(window.devicePixelRatio || 1, this.lite ? 1.5 : 2);
-
-    this.canvas.width = Math.max(1, Math.floor(displayW * dpr));
-    this.canvas.height = Math.max(1, Math.floor(displayH * dpr));
-    this.canvas.style.removeProperty('width');
-    this.canvas.style.removeProperty('height');
-    this.ctx?.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const { displayW, displayH } = resizeMenuWarpCanvasHost(
+      this.canvas,
+      this.ctx,
+      this.host,
+      this.lite,
+      { screenClass: '.result-screen', clearCanvasStyle: true },
+    );
 
     if (!this.warp) {
       this.warp = new CosmicWarpBackground(displayW, displayH, this.particleCount());
@@ -209,10 +190,7 @@ export class ResultScreenBackground {
     const flashScale = this.reducedFlash ? 0.55 : 1;
     const cx = w * 0.5;
     const cy = h * 0.5;
-    const maxR = Math.hypot(
-      Math.max(cx, w - cx),
-      Math.max(cy, h - cy),
-    ) * 1.12;
+    const maxR = Math.hypot(Math.max(cx, w - cx), Math.max(cy, h - cy)) * 1.12;
 
     this.drawCelebrationWash(ctx, cx, cy, w, h, flashScale);
     this.drawPulseRings(ctx, cx, cy, maxR, flashScale);

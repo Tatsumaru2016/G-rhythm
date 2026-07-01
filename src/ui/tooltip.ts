@@ -42,9 +42,7 @@ function positionTooltipBubble(host: HTMLElement, bubble: HTMLElement): void {
   const { width, height } = measureBubble(bubble);
 
   let placeAbove = preferAbove;
-  let top = placeAbove
-    ? hostRect.top - height - TOOLTIP_GAP
-    : hostRect.bottom + TOOLTIP_GAP;
+  let top = placeAbove ? hostRect.top - height - TOOLTIP_GAP : hostRect.bottom + TOOLTIP_GAP;
 
   if (!placeAbove && top + height > window.innerHeight - VIEWPORT_PAD) {
     const aboveTop = hostRect.top - height - TOOLTIP_GAP;

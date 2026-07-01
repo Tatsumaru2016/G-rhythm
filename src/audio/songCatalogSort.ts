@@ -48,11 +48,7 @@ export function sortFolderCatalog(
         cmp = compareLocale(a.track.file.name, b.track.file.name);
         break;
       case 'bpm':
-        cmp = compareOptionalNumber(
-          getMeta(a.track).bpm,
-          getMeta(b.track).bpm,
-          settings.direction,
-        );
+        cmp = compareOptionalNumber(getMeta(a.track).bpm, getMeta(b.track).bpm, settings.direction);
         break;
       case 'duration':
         cmp = compareOptionalNumber(
@@ -83,7 +79,9 @@ export function folderCatalogDisplayIndex(
   catalogIndex: number,
   getMeta: (track: CustomTrackEntry) => FolderTrackSortMeta,
 ): number {
-  return sortedRows(catalog, settings, getMeta).findIndex((row) => row.catalogIndex === catalogIndex);
+  return sortedRows(catalog, settings, getMeta).findIndex(
+    (row) => row.catalogIndex === catalogIndex,
+  );
 }
 
 export function stepFolderCatalogIndex(

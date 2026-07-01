@@ -3,19 +3,14 @@ import type { PhaseColorScheme } from '../game/scrollPhase';
 import { tGenre } from '../i18n';
 
 export const MUSIC_GENRES: MusicGenre[] = [
-  'electronic', 'rock', 'pop', 'jazz', 'classical', 'hiphop', 'other',
+  'electronic',
+  'rock',
+  'pop',
+  'jazz',
+  'classical',
+  'hiphop',
+  'other',
 ];
-
-/** @deprecated use tGenre() */
-export const GENRE_LABELS: Record<MusicGenre, string> = {
-  electronic: 'Electronic',
-  rock: 'Rock',
-  pop: 'Pop',
-  jazz: 'Jazz',
-  classical: 'Classical',
-  hiphop: 'Hip-Hop',
-  other: 'Other',
-};
 
 export function getGenreLabel(genre: MusicGenre): string {
   return tGenre(genre);
@@ -108,7 +103,7 @@ export function extractAudioFeatures(buffer: AudioBuffer): AudioFeatures {
       const ratio = intervals[i] / Math.max(0.001, intervals[i - 1]);
       if (ratio > 1.12 && ratio < 1.92) swingPairs++;
     }
-    swingScore = Math.min(1, swingPairs / Math.max(1, intervals.length / 2) * 1.6);
+    swingScore = Math.min(1, (swingPairs / Math.max(1, intervals.length / 2)) * 1.6);
   }
 
   let bassEnergy = 0;
@@ -150,7 +145,10 @@ export function extractAudioFeatures(buffer: AudioBuffer): AudioFeatures {
   const avgOnsetEnergy = onsets.reduce((s, o) => s + o.energy, 0) / Math.max(1, onsets.length);
   const onsetDensity = onsets.length / duration;
   const dynamicRange = Math.min(1, peak / (rmsSum / windows + 0.001) / 10);
-  const sustainedScore = Math.max(0, Math.min(1, (1 - onsetDensity / 2.8) * 0.6 + dynamicRange * 0.4));
+  const sustainedScore = Math.max(
+    0,
+    Math.min(1, (1 - onsetDensity / 2.8) * 0.6 + dynamicRange * 0.4),
+  );
 
   return {
     bpm: estimateBpmFromOnsets(onsets),
@@ -177,12 +175,20 @@ function scoreGenres(f: AudioFeatures): Record<MusicGenre, number> {
     other: 0.08,
   };
 
-  scores.electronic += f.tempoStability * 1.8 + f.bassRatio * 2.2 + (f.onsetDensity > 1.2 ? 0.8 : 0);
+  scores.electronic +=
+    f.tempoStability * 1.8 + f.bassRatio * 2.2 + (f.onsetDensity > 1.2 ? 0.8 : 0);
   scores.rock += f.transientRatio * 2.2 + f.midRatio * 1.4 + f.tempoStability * 0.9;
-  scores.pop += f.tempoStability * 1.2 + (1 - Math.abs(f.bassRatio - 0.32)) * 1.2 + (f.onsetDensity > 0.6 && f.onsetDensity < 2.2 ? 0.6 : 0);
+  scores.pop +=
+    f.tempoStability * 1.2 +
+    (1 - Math.abs(f.bassRatio - 0.32)) * 1.2 +
+    (f.onsetDensity > 0.6 && f.onsetDensity < 2.2 ? 0.6 : 0);
   scores.jazz += f.swingScore * 3.2 + (1 - f.tempoStability) * 0.4 + f.midRatio * 0.6;
-  scores.classical += f.sustainedScore * 2.4 + f.dynamicRange * 1.6 + (f.onsetDensity < 1.1 ? 1.0 : 0);
-  scores.hiphop += f.bassRatio * 2.8 + f.transientRatio * 1.4 + (f.onsetDensity > 0.8 && f.onsetDensity < 2.5 ? 0.5 : 0);
+  scores.classical +=
+    f.sustainedScore * 2.4 + f.dynamicRange * 1.6 + (f.onsetDensity < 1.1 ? 1.0 : 0);
+  scores.hiphop +=
+    f.bassRatio * 2.8 +
+    f.transientRatio * 1.4 +
+    (f.onsetDensity > 0.8 && f.onsetDensity < 2.5 ? 0.5 : 0);
 
   return scores;
 }
@@ -206,83 +212,147 @@ export function analyzeGenre(buffer: AudioBuffer): GenreAnalysis {
     }
   }
 
-  const confidence = best <= 0 ? 0.3 : Math.max(0.35, Math.min(0.98, (best - Math.max(0, second)) / best + 0.35));
+  const confidence =
+    best <= 0 ? 0.3 : Math.max(0.35, Math.min(0.98, (best - Math.max(0, second)) / best + 0.35));
 
   return { genre, confidence, features };
 }
 
 const GENRE_CHART: Record<MusicGenre, GenreChartModifiers> = {
   electronic: {
-    lpb: 4, minGapScale: 0.82, minBeatGapDelta: -1, onsetFluxScale: 0.9,
-    holdEnergyScale: 0.82, holdDurationBonus: 2, holdBeatModDelta: -2,
-    smoothLanes: false, beatEmphasis: true,
+    lpb: 4,
+    minGapScale: 0.82,
+    minBeatGapDelta: -1,
+    onsetFluxScale: 0.9,
+    holdEnergyScale: 0.82,
+    holdDurationBonus: 2,
+    holdBeatModDelta: -2,
+    smoothLanes: false,
+    beatEmphasis: true,
   },
   rock: {
-    lpb: 4, minGapScale: 0.88, minBeatGapDelta: -1, onsetFluxScale: 0.82,
-    holdEnergyScale: 0.92, holdDurationBonus: 1, holdBeatModDelta: 0,
-    smoothLanes: false, beatEmphasis: false,
+    lpb: 4,
+    minGapScale: 0.88,
+    minBeatGapDelta: -1,
+    onsetFluxScale: 0.82,
+    holdEnergyScale: 0.92,
+    holdDurationBonus: 1,
+    holdBeatModDelta: 0,
+    smoothLanes: false,
+    beatEmphasis: false,
   },
   pop: {
-    lpb: 4, minGapScale: 1.0, minBeatGapDelta: 0, onsetFluxScale: 1.0,
-    holdEnergyScale: 1.0, holdDurationBonus: 0, holdBeatModDelta: 0,
-    smoothLanes: true, beatEmphasis: false,
+    lpb: 4,
+    minGapScale: 1.0,
+    minBeatGapDelta: 0,
+    onsetFluxScale: 1.0,
+    holdEnergyScale: 1.0,
+    holdDurationBonus: 0,
+    holdBeatModDelta: 0,
+    smoothLanes: true,
+    beatEmphasis: false,
   },
   jazz: {
-    lpb: 6, minGapScale: 1.08, minBeatGapDelta: 1, onsetFluxScale: 1.05,
-    holdEnergyScale: 1.15, holdDurationBonus: 3, holdBeatModDelta: 2,
-    smoothLanes: true, beatEmphasis: false,
+    lpb: 6,
+    minGapScale: 1.08,
+    minBeatGapDelta: 1,
+    onsetFluxScale: 1.05,
+    holdEnergyScale: 1.15,
+    holdDurationBonus: 3,
+    holdBeatModDelta: 2,
+    smoothLanes: true,
+    beatEmphasis: false,
   },
   classical: {
-    lpb: 4, minGapScale: 1.28, minBeatGapDelta: 2, onsetFluxScale: 1.15,
-    holdEnergyScale: 0.68, holdDurationBonus: 6, holdBeatModDelta: 4,
-    smoothLanes: true, beatEmphasis: false,
+    lpb: 4,
+    minGapScale: 1.28,
+    minBeatGapDelta: 2,
+    onsetFluxScale: 1.15,
+    holdEnergyScale: 0.68,
+    holdDurationBonus: 6,
+    holdBeatModDelta: 4,
+    smoothLanes: true,
+    beatEmphasis: false,
   },
   hiphop: {
-    lpb: 4, minGapScale: 0.92, minBeatGapDelta: 0, onsetFluxScale: 0.88,
-    holdEnergyScale: 1.05, holdDurationBonus: 1, holdBeatModDelta: -1,
-    smoothLanes: false, beatEmphasis: true,
+    lpb: 4,
+    minGapScale: 0.92,
+    minBeatGapDelta: 0,
+    onsetFluxScale: 0.88,
+    holdEnergyScale: 1.05,
+    holdDurationBonus: 1,
+    holdBeatModDelta: -1,
+    smoothLanes: false,
+    beatEmphasis: true,
   },
   other: {
-    lpb: 4, minGapScale: 1.0, minBeatGapDelta: 0, onsetFluxScale: 1.0,
-    holdEnergyScale: 1.0, holdDurationBonus: 0, holdBeatModDelta: 0,
-    smoothLanes: false, beatEmphasis: false,
+    lpb: 4,
+    minGapScale: 1.0,
+    minBeatGapDelta: 0,
+    onsetFluxScale: 1.0,
+    holdEnergyScale: 1.0,
+    holdDurationBonus: 0,
+    holdBeatModDelta: 0,
+    smoothLanes: false,
+    beatEmphasis: false,
   },
 };
 
 /** 0=Rings 1=PrismPulse 2=Plasma 3=AuroraFlow 4=Beams 5=Waves 6=NeonCascade 7=Scanlines 8=Starburst */
 const GENRE_VISUAL: Record<MusicGenre, GenreVisualProfile> = {
   electronic: {
-    hueBase: 285, hueSecondary: 195, hueAccent: 320, saturation: 96,
+    hueBase: 285,
+    hueSecondary: 195,
+    hueAccent: 320,
+    saturation: 96,
     patternWeights: [1, 2, 3, 1, 2, 1, 4, 1, 3],
     driveScale: 1.15,
   },
   rock: {
-    hueBase: 350, hueSecondary: 25, hueAccent: 5, saturation: 94,
+    hueBase: 350,
+    hueSecondary: 25,
+    hueAccent: 5,
+    saturation: 94,
     patternWeights: [3, 1, 1, 2, 4, 2, 4, 3, 2],
     driveScale: 1.2,
   },
   pop: {
-    hueBase: 310, hueSecondary: 55, hueAccent: 200, saturation: 90,
+    hueBase: 310,
+    hueSecondary: 55,
+    hueAccent: 200,
+    saturation: 90,
     patternWeights: [2, 2, 2, 3, 2, 2, 3, 1, 3],
     driveScale: 1.0,
   },
   jazz: {
-    hueBase: 38, hueSecondary: 280, hueAccent: 160, saturation: 82,
+    hueBase: 38,
+    hueSecondary: 280,
+    hueAccent: 160,
+    saturation: 82,
     patternWeights: [1, 1, 2, 3, 2, 4, 3, 1, 2],
     driveScale: 0.95,
   },
   classical: {
-    hueBase: 220, hueSecondary: 45, hueAccent: 260, saturation: 72,
+    hueBase: 220,
+    hueSecondary: 45,
+    hueAccent: 260,
+    saturation: 72,
     patternWeights: [2, 1, 1, 4, 1, 2, 3, 1, 3],
     driveScale: 0.88,
   },
   hiphop: {
-    hueBase: 130, hueSecondary: 300, hueAccent: 50, saturation: 88,
+    hueBase: 130,
+    hueSecondary: 300,
+    hueAccent: 50,
+    saturation: 88,
     patternWeights: [2, 1, 2, 2, 3, 2, 5, 4, 2],
     driveScale: 1.1,
   },
   other: {
-    hueBase: 240, hueSecondary: 300, hueAccent: 180, saturation: 88,
+    hueBase: 240,
+    hueSecondary: 300,
+    hueAccent: 180,
+    saturation: 88,
     patternWeights: [1, 1, 1, 1, 1, 1, 3, 1, 1],
     driveScale: 1.0,
   },

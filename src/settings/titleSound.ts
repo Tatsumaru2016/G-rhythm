@@ -8,12 +8,16 @@ export function loadTitleSound(): boolean {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored === null) return DEFAULT_TITLE_SOUND;
     return stored === '1';
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return DEFAULT_TITLE_SOUND;
 }
 
 export function saveTitleSound(enabled: boolean): void {
   try {
     localStorage.setItem(STORAGE_KEY, enabled ? '1' : '0');
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }

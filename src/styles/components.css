@@ -1,0 +1,284 @@
+/* Buttons */
+.btn-primary,
+.btn-secondary {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: 0.15em;
+  padding: 0.9rem 2.5rem;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin: 0.5rem;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #ff2d6a, #a855f7);
+  color: #fff;
+  box-shadow: 0 0 25px rgba(255, 45, 106, 0.4);
+}
+
+.btn-primary:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 40px rgba(255, 45, 106, 0.6);
+}
+
+.btn-primary.pulse {
+  animation: btn-pulse 2s ease-in-out infinite;
+}
+
+@keyframes btn-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 25px rgba(255, 45, 106, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 50px rgba(168, 85, 247, 0.7);
+  }
+}
+
+.btn-secondary {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.btn-secondary:hover {
+  border-color: rgba(255, 255, 255, 0.5);
+  color: #fff;
+}
+
+/* Touch zones for mobile ?Epositioned over left playfield lanes at runtime */
+.touch-zone {
+  position: absolute;
+  pointer-events: auto;
+  z-index: 5;
+  opacity: 0;
+}
+
+/* Custom music settings */
+.setting-row {
+  display: grid;
+  grid-template-columns: 100px 1fr 48px;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.setting-row input[type='range'] {
+  width: 100%;
+  accent-color: #00e5ff;
+}
+
+.setting-row select {
+  grid-column: 2 / 4;
+  padding: 0.5rem;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: #fff;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.8rem;
+}
+
+.difficulty-options {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+}
+
+.difficulty-option {
+  position: relative;
+  padding: 0.55rem 0.4rem;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.75);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.difficulty-option.easy {
+  color: #00ff88;
+}
+.difficulty-option.normal {
+  color: #00e5ff;
+}
+.difficulty-option.hard {
+  color: #ffd700;
+}
+.difficulty-option.extreme {
+  color: #ff2d6a;
+}
+
+.difficulty-option:hover,
+.difficulty-option:focus-visible {
+  transform: translateY(-1px);
+  border-color: var(--hub-item-hover-border, rgba(190, 248, 255, 0.95));
+  background: var(--hub-item-hover-bg, rgba(10, 36, 62, 0.96));
+  color: var(--hub-item-hover-text, #ffffff);
+  box-shadow: var(
+    --hub-item-hover-glow,
+    0 0 16px rgba(0, 229, 255, 0.52),
+    inset 0 0 12px rgba(0, 229, 255, 0.18)
+  );
+}
+
+.difficulty-option.selected {
+  background: rgba(0, 229, 255, 0.12);
+  border-color: rgba(0, 229, 255, 0.45);
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.15);
+  font-weight: 800;
+}
+
+.difficulty-option.selected::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 0.28rem;
+  transform: translateX(-50%);
+  width: 0.55rem;
+  height: 0.14rem;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
+  opacity: 0.92;
+}
+
+.difficulty-option.easy.selected {
+  background: rgba(0, 255, 136, 0.12);
+  border-color: rgba(0, 255, 136, 0.45);
+  box-shadow: 0 0 12px rgba(0, 255, 136, 0.12);
+}
+
+.difficulty-option.normal.selected {
+  background: rgba(0, 229, 255, 0.16);
+  border-color: rgba(0, 229, 255, 0.55);
+  box-shadow: 0 0 14px rgba(0, 229, 255, 0.22);
+}
+
+.difficulty-option.hard.selected {
+  background: rgba(255, 215, 0, 0.1);
+  border-color: rgba(255, 215, 0, 0.45);
+  box-shadow: 0 0 12px rgba(255, 215, 0, 0.12);
+}
+
+.difficulty-option.extreme.selected {
+  background: rgba(255, 45, 106, 0.12);
+  border-color: rgba(255, 45, 106, 0.5);
+  box-shadow: 0 0 14px rgba(255, 45, 106, 0.18);
+}
+
+.difficulty-picker .setting-hint {
+  margin-top: 0.55rem;
+  margin-bottom: 0;
+}
+
+.setting-value {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 700;
+  color: #00e5ff;
+  text-align: right;
+}
+
+.has-tooltip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  cursor: help;
+  outline: none;
+}
+
+.has-tooltip::after {
+  content: '?';
+  flex: 0 0 auto;
+  margin-left: 0.35rem;
+  width: 0.95rem;
+  height: 0.95rem;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 200, 255, 0.35);
+  color: rgba(0, 220, 255, 0.85);
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 0.95rem;
+  text-align: center;
+}
+
+.tooltip-bubble {
+  position: absolute;
+  z-index: 30;
+  left: 50%;
+  top: calc(100% + 0.45rem);
+  transform: translateX(-50%);
+  min-width: 10rem;
+  max-width: min(240px, 70vw);
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  background: rgba(2, 10, 28, 0.96);
+  border: 1px solid rgba(0, 200, 255, 0.28);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  color: rgba(220, 240, 255, 0.92);
+  font-size: 0.68rem;
+  line-height: 1.55;
+  text-align: left;
+  white-space: normal;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.15s ease,
+    visibility 0.15s ease;
+}
+
+.tooltip-bubble--measuring {
+  position: fixed !important;
+  left: -10000px !important;
+  top: 0 !important;
+  visibility: hidden !important;
+  opacity: 1 !important;
+  transform: none !important;
+}
+
+.tooltip-bubble--placed {
+  position: fixed;
+  left: var(--tooltip-x, 0);
+  top: var(--tooltip-y, 0);
+  right: auto;
+  bottom: auto;
+  transform: none;
+  z-index: 200;
+}
+
+.has-tooltip--above .tooltip-bubble {
+  top: auto;
+  bottom: calc(100% + 0.45rem);
+}
+
+.has-tooltip:hover .tooltip-bubble,
+.has-tooltip:focus-visible .tooltip-bubble {
+  opacity: 1;
+  visibility: visible;
+}
+
+.title-settings-panel .has-tooltip .tooltip-bubble {
+  max-width: min(220px, 62vw);
+}
+
+.setting-hint {
+  font-size: 0.75rem;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.35);
+  text-align: center;
+  margin-top: 0.5rem;
+}

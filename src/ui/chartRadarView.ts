@@ -34,11 +34,13 @@ function axisAngle(index: number): number {
 }
 
 function polygonPoints(values: number[], maxRadius = RADAR_RADIUS): string {
-  return values.map((value, i) => {
-    const r = (Math.min(100, Math.max(0, value)) / 100) * maxRadius;
-    const { x, y } = polarPoint(axisAngle(i), r);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(' ');
+  return values
+    .map((value, i) => {
+      const r = (Math.min(100, Math.max(0, value)) / 100) * maxRadius;
+      const { x, y } = polarPoint(axisAngle(i), r);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(' ');
 }
 
 function gridPolygon(scale: number): string {
@@ -78,7 +80,8 @@ export function renderChartLevelHtml(
   const aria = t('ui.chartLevel', { level: level ?? 0 });
 
   if (variant === 'hero' || variant === 'panel') {
-    const variantClass = variant === 'hero' ? ' song-chart-level--hero' : ' song-chart-level--panel';
+    const variantClass =
+      variant === 'hero' ? ' song-chart-level--hero' : ' song-chart-level--panel';
     return `<span class="song-chart-level${variantClass}" aria-label="${aria}"><span class="song-chart-level__word">LEVEL</span><span class="song-chart-level__num">${num}</span></span>`;
   }
 
@@ -118,7 +121,11 @@ function radarSvgUid(seed: string): string {
   return seed.replace(/[^a-zA-Z0-9_-]/g, '') || 'chart';
 }
 
-export function renderChartRadarSvg(stats: ChartRadarStats, large = false, chartId = 'chart'): string {
+export function renderChartRadarSvg(
+  stats: ChartRadarStats,
+  large = false,
+  chartId = 'chart',
+): string {
   const uid = radarSvgUid(chartId);
   const gradId = `chart-radar-fill-grad-${uid}`;
   const values = CHART_RADAR_AXES.map((key) => stats[key]);
@@ -143,7 +150,8 @@ export function renderChartRadarSvg(stats: ChartRadarStats, large = false, chart
     `;
   }).join('');
 
-  const defs = large ? `
+  const defs = large
+    ? `
     <defs>
       <radialGradient id="${gradId}" cx="${RADAR_CENTER}" cy="${RADAR_CENTER}" r="${RADAR_RADIUS}" gradientUnits="userSpaceOnUse">
         <stop offset="0%" stop-color="#ffd4ec" stop-opacity="0.94" />
@@ -151,16 +159,15 @@ export function renderChartRadarSvg(stats: ChartRadarStats, large = false, chart
         <stop offset="100%" stop-color="#e01888" stop-opacity="0.62" />
       </radialGradient>
     </defs>
-  ` : '';
+  `
+    : '';
 
   const bodyFill = `<polygon class="chart-radar-body" points="${gridPolygon(1)}" />`;
 
   const grids = gridLevels.map((scale) => gridPolygonMarkup(scale)).join('');
 
   const dataPoints = polygonPoints(values);
-  const fillPaint = large
-    ? `fill="url(#${gradId})"`
-    : 'fill="rgba(255, 77, 166, 0.58)"';
+  const fillPaint = large ? `fill="url(#${gradId})"` : 'fill="rgba(255, 77, 166, 0.58)"';
 
   const svg = `
     <svg class="${svgClass}" viewBox="${-VIEWBOX_PAD} ${-VIEWBOX_PAD} ${VIEWBOX_SIZE} ${VIEWBOX_SIZE}" role="img" aria-label="${t('ui.chartRadar')}" data-chart-id="${uid}">
@@ -191,7 +198,11 @@ export function renderSongChartAnalysisHtml(
   if (!chart || chart.notes.length === 0) {
     return {
       ratingHtml: renderChartRatingHtml(null),
-      radarHtml: renderChartRadarSvg({ stream: 0, voltage: 0, air: 0, freeze: 0, chaos: 0 }, largeRadar, chartId),
+      radarHtml: renderChartRadarSvg(
+        { stream: 0, voltage: 0, air: 0, freeze: 0, chaos: 0 },
+        largeRadar,
+        chartId,
+      ),
     };
   }
   return {

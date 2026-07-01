@@ -6,11 +6,6 @@
 
 export const PLAY_STAGE_DECOR_FX_ENABLED = true;
 
-
-
 export function isPlayStageDecorFxEnabled(): boolean {
-
   return PLAY_STAGE_DECOR_FX_ENABLED;
-
 }
-

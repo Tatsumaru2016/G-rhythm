@@ -1,10 +1,14 @@
 import type { ActiveNote, ChartData, GameStats, JudgmentType, LaneIndex } from '../types';
 import {
-  LANE_COLORS, LANE_LABELS, LANE_ARROW_LABELS, DEFAULT_NOTE_SPEED, BASE_APPROACH_TIME,
+  LANE_COLORS,
+  LANE_LABELS,
+  LANE_ARROW_LABELS,
+  DEFAULT_NOTE_SPEED,
+  BASE_APPROACH_TIME,
 } from '../types';
 import { JUDGMENT_COLORS } from './Judgment';
 import { ParticleSystem } from './ParticleSystem';
-import { SideStageFX, type LaneBounds } from './SideStageFX';
+import { SideStageFX } from './SideStageFX';
 import {
   clampDanceGauge,
   DANCE_GAUGE_DANGER_THRESHOLD,
@@ -20,19 +24,10 @@ import type { AudioReactive } from '../audio/AudioEngine';
 import { DEFAULT_SCROLL_SPEED } from '../settings/scrollSpeed';
 import { isPlayStageDecorFxEnabled } from '../settings/playStageFx';
 import { getSongPhase, PHASE_BACKGROUND_THEMES, type SongPhase } from './scrollPhase';
-import { getGenreLabel, resolveGenre } from '../audio/musicGenre';
-import {
-  getMilestoneSublabel,
-  t,
-  tFreezeJudgment,
-  type FreezeJudgment,
-} from '../i18n';
+import { getMilestoneSublabel, t, tFreezeJudgment, type FreezeJudgment } from '../i18n';
 import { getJudgmentLabel } from './Judgment';
-import {
-  ACCURACY_MILESTONE_STYLE,
-  getAccuracyTier,
-  type AccuracyTier,
-} from './accuracyMilestone';
+import { drawPlayHud } from './playHudRenderer';
+import { ACCURACY_MILESTONE_STYLE, type AccuracyTier } from './accuracyMilestone';
 
 interface LaneGlow {
   intensity: number;
@@ -106,7 +101,13 @@ export class Renderer {
   private reducedFlash = false;
   private screen: ScreenEffect = { shake: 0, perfectPulse: 0, missFlash: 0 };
   private comboBreak: ComboBreakFx | null = null;
-  private lastJudgment: { text: string; color: string; alpha: number; scale: number; glow: number } | null = null;
+  private lastJudgment: {
+    text: string;
+    color: string;
+    alpha: number;
+    scale: number;
+    glow: number;
+  } | null = null;
   private accuracyMilestoneBanner: {
     tier: AccuracyTier;
     alpha: number;
@@ -144,7 +145,13 @@ export class Renderer {
     window.addEventListener('resize', () => this.resize());
   }
 
-  private laneBounds(): { startX: number; topY: number; width: number; bottomY: number; hitLineY: number } {
+  private laneBounds(): {
+    startX: number;
+    topY: number;
+    width: number;
+    bottomY: number;
+    hitLineY: number;
+  } {
     return {
       startX: this.laneStartX,
       topY: this.laneTopY,
@@ -308,7 +315,8 @@ export class Renderer {
   getApproachTime(currentTime = 0): number {
     const travel = this.hitLineY - this.laneTopY;
     const speed = this.getNoteSpeed(currentTime);
-    if (travel <= 0 || speed <= 0) return BASE_APPROACH_TIME / this.getEffectiveScrollMultiplier(currentTime);
+    if (travel <= 0 || speed <= 0)
+      return BASE_APPROACH_TIME / this.getEffectiveScrollMultiplier(currentTime);
     return travel / speed;
   }
 
@@ -341,6 +349,7 @@ export class Renderer {
   triggerLaneGlow(lane: LaneIndex, judgment: JudgmentType) {
     const scale = this.reducedFlash ? 0.45 : 1;
     const intensity: Record<JudgmentType, number> = {
+      marvelous: 1.35,
       perfect: 1.2,
       great: 1.0,
       good: 0.92,
@@ -387,6 +396,10 @@ export class Renderer {
       return;
     }
     switch (judgment) {
+      case 'marvelous':
+        this.screen.perfectPulse = 1.15;
+        this.screen.shake = 1.5;
+        break;
       case 'perfect':
         this.screen.perfectPulse = 1;
         this.screen.shake = 2;
@@ -412,6 +425,7 @@ export class Renderer {
 
   showJudgment(judgment: JudgmentType) {
     const scales: Record<JudgmentType, number> = {
+      marvelous: 1.55,
       perfect: 1.45,
       great: 1.32,
       good: 1.28,
@@ -419,6 +433,7 @@ export class Renderer {
       miss: 1.1,
     };
     const glows: Record<JudgmentType, number> = {
+      marvelous: 34,
       perfect: 28,
       great: 22,
       good: 24,
@@ -555,11 +570,17 @@ export class Renderer {
     }
 
     const pulseScale = this.reducedFlash ? 0.2 : 1;
-    const pulse = (this.screen.perfectPulse + (stats.combo > 0 ? Math.min(0.4, stats.combo * 0.004) : 0)) * pulseScale;
+    const pulse =
+      (this.screen.perfectPulse + (stats.combo > 0 ? Math.min(0.4, stats.combo * 0.004) : 0)) *
+      pulseScale;
 
     if (decorFx) {
       const preSync = SideStageFX.buildSync(
-        currentTime, chart, stats, pulse, audioReactive,
+        currentTime,
+        chart,
+        stats,
+        pulse,
+        audioReactive,
         this.sideFX.getHitBoost(),
         this.sideFX.getPerfectBoost(),
         this.sideFX.getHue(),
@@ -578,7 +599,11 @@ export class Renderer {
 
     if (decorFx) {
       const sync = SideStageFX.buildSync(
-        currentTime, chart, stats, pulse, audioReactive,
+        currentTime,
+        chart,
+        stats,
+        pulse,
+        audioReactive,
         this.sideFX.getHitBoost(),
         this.sideFX.getPerfectBoost(),
         this.sideFX.getHue(),
@@ -647,8 +672,12 @@ export class Renderer {
     ctx.fillRect(0, 0, this.width, this.height);
 
     const nebula = ctx.createRadialGradient(
-      this.width * 0.62, this.height * 0.42, 0,
-      this.width * 0.62, this.height * 0.42, this.width * 0.72,
+      this.width * 0.62,
+      this.height * 0.42,
+      0,
+      this.width * 0.62,
+      this.height * 0.42,
+      this.width * 0.72,
     );
     nebula.addColorStop(0, theme.nebulaCenter);
     nebula.addColorStop(0.45, theme.nebulaMid);
@@ -657,8 +686,12 @@ export class Renderer {
     ctx.fillRect(0, 0, this.width, this.height);
 
     const laneNebula = ctx.createRadialGradient(
-      this.getPlayfieldCenterX(), this.height * 0.55, 0,
-      this.getPlayfieldCenterX(), this.height * 0.55, this.width * 0.38,
+      this.getPlayfieldCenterX(),
+      this.height * 0.55,
+      0,
+      this.getPlayfieldCenterX(),
+      this.height * 0.55,
+      this.width * 0.38,
     );
     laneNebula.addColorStop(0, theme.nebulaMid);
     laneNebula.addColorStop(1, 'rgba(0, 0, 0, 0)');
@@ -673,9 +706,7 @@ export class Renderer {
       const y = animated
         ? (star.y * this.height + this.time * 20 * star.z) % this.height
         : star.y * this.height;
-      const twinkle = animated
-        ? 0.78 + 0.22 * Math.sin(this.time * 1.1 + star.x * 10)
-        : 0.65;
+      const twinkle = animated ? 0.78 + 0.22 * Math.sin(this.time * 1.1 + star.x * 10) : 0.65;
       const size = star.z * 2;
       ctx.globalAlpha = star.brightness * twinkle;
       ctx.fillStyle = `rgb(${sr}, ${sg}, ${sb})`;
@@ -685,10 +716,15 @@ export class Renderer {
 
     if (this.phaseTransition > 0.02 && !this.reducedFlash) {
       const [fr, fg, fb] = theme.flashRgb;
-      const flash = this.phaseTransition * (phase === 'late' ? 0.42 : phase === 'mid' ? 0.36 : 0.32);
+      const flash =
+        this.phaseTransition * (phase === 'late' ? 0.42 : phase === 'mid' ? 0.36 : 0.32);
       const flashGrad = ctx.createRadialGradient(
-        this.width * 0.5, this.height * 0.45, 0,
-        this.width * 0.5, this.height * 0.45, this.width * 0.65,
+        this.width * 0.5,
+        this.height * 0.45,
+        0,
+        this.width * 0.5,
+        this.height * 0.45,
+        this.width * 0.65,
       );
       flashGrad.addColorStop(0, `rgba(${fr}, ${fg}, ${fb}, ${flash})`);
       flashGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
@@ -708,21 +744,23 @@ export class Renderer {
     for (let i = 0; i < 4; i++) {
       const glow = this.laneGlows[i];
       const left = this.laneLeft(i as LaneIndex);
-      const laneStressPulse = stress >= 1
-        ? 0.65 + 0.35 * Math.sin(this.time * (danger ? 12 : 8) + i * 1.4)
-        : 1;
+      const laneStressPulse =
+        stress >= 1 ? 0.65 + 0.35 * Math.sin(this.time * (danger ? 12 : 8) + i * 1.4) : 1;
 
       if (glow.intensity > 0.05) {
-        ctx.fillStyle = `${glow.color}${Math.floor(glow.intensity * 45).toString(16).padStart(2, '0')}`;
+        ctx.fillStyle = `${glow.color}${Math.floor(glow.intensity * 45)
+          .toString(16)
+          .padStart(2, '0')}`;
         ctx.fillRect(left, this.hitLineY - 90, this.laneWidth, 90);
       }
 
       if (i > 0) {
-        ctx.strokeStyle = stress >= 1
-          ? danger
-            ? `rgba(255, 72, 88, ${0.22 + stressMix * 0.28 * laneStressPulse})`
-            : `rgba(255, 140, 72, ${0.18 + stressMix * 0.22 * laneStressPulse})`
-          : `${LANE_COLORS[i - 1]}55`;
+        ctx.strokeStyle =
+          stress >= 1
+            ? danger
+              ? `rgba(255, 72, 88, ${0.22 + stressMix * 0.28 * laneStressPulse})`
+              : `rgba(255, 140, 72, ${0.18 + stressMix * 0.22 * laneStressPulse})`
+            : `${LANE_COLORS[i - 1]}55`;
         ctx.lineWidth = stress >= 1 ? 1.2 + stressMix * 0.5 : 1;
         ctx.beginPath();
         ctx.moveTo(left, this.laneTopY);
@@ -731,9 +769,7 @@ export class Renderer {
       }
     }
 
-    const borderPulse = stress >= 1
-      ? (danger ? 0.55 : 0.42) + (danger ? 0.45 : 0.35) * pulse
-      : 1;
+    const borderPulse = stress >= 1 ? (danger ? 0.55 : 0.42) + (danger ? 0.45 : 0.35) * pulse : 1;
     ctx.strokeStyle = danger
       ? `rgba(255, 64, 80, ${0.28 + stressMix * 0.32 * borderPulse})`
       : warning
@@ -767,16 +803,13 @@ export class Renderer {
       ctx.stroke();
     }
 
-    this.drawLaneCenterGuides(
-      this.laneTopY + this.gaugeBandH,
-      this.hitLineY,
-    );
+    this.drawLaneCenterGuides(this.laneTopY + this.gaugeBandH, this.hitLineY);
   }
 
   private drawLaneCenterGuides(topY: number, bottomY: number) {
     const ctx = this.ctx;
     if (bottomY <= topY) return;
-    const { stress, severity, pulse } = this.getPlayfieldStressMetrics(this.lastDanceGauge);
+    const { stress, severity } = this.getPlayfieldStressMetrics(this.lastDanceGauge);
     const stressMix = this.reducedFlash ? severity * 0.35 : severity;
 
     ctx.save();
@@ -784,9 +817,8 @@ export class Renderer {
     for (let i = 0; i < 4; i++) {
       const cx = this.getLaneCenterX(i as LaneIndex);
       const color = LANE_COLORS[i];
-      const lanePulse = stress >= 1
-        ? 0.55 + 0.45 * Math.sin(this.time * (stress >= 2 ? 10 : 7) + i * 1.1)
-        : 1;
+      const lanePulse =
+        stress >= 1 ? 0.55 + 0.45 * Math.sin(this.time * (stress >= 2 ? 10 : 7) + i * 1.1) : 1;
       if (stress >= 1) {
         const rgb = stress >= 2 ? '255, 72, 88' : '255, 140, 80';
         ctx.strokeStyle = `rgba(${rgb}, ${(0.28 + stressMix * 0.42) * lanePulse})`;
@@ -952,9 +984,10 @@ export class Renderer {
       const tailTop = tailCy - h / 2;
       const bodyTop = Math.min(headBottom, tailTop);
       const bodyBottom = Math.min(laneBottom, Math.max(headBottom, tailTop));
-      const progress = note.holding && note.endTime
-        ? Math.min(1, Math.max(0, (currentTime - note.time) / (note.endTime - note.time)))
-        : 0;
+      const progress =
+        note.holding && note.endTime
+          ? Math.min(1, Math.max(0, (currentTime - note.time) / (note.endTime - note.time)))
+          : 0;
 
       if (bodyBottom > bodyTop) {
         this.drawHoldBody(left, w, bodyTop, bodyBottom, color, note.holding, progress);
@@ -1089,14 +1122,31 @@ export class Renderer {
         const tailCy = note.holding ? this.hitLineY : endY;
 
         if (!note.hit) {
-          this.drawTapNote(left, startY, w, h, color, note.time - currentTime, 'hold-press', currentTime);
+          this.drawTapNote(
+            left,
+            startY,
+            w,
+            h,
+            color,
+            note.time - currentTime,
+            'hold-press',
+            currentTime,
+          );
         }
         if (!note.released) {
           const clampedTailCy = Math.min(laneBottom - h / 2, tailCy);
           const tailTime = note.holding ? 0 : note.endTime - currentTime;
           const releaseUrgency = this.getHoldReleaseUrgency(note, currentTime);
           this.drawTapNote(
-            left, clampedTailCy, w, h, color, tailTime, 'hold-release', currentTime, releaseUrgency,
+            left,
+            clampedTailCy,
+            w,
+            h,
+            color,
+            tailTime,
+            'hold-release',
+            currentTime,
+            releaseUrgency,
           );
         }
       }
@@ -1157,9 +1207,10 @@ export class Renderer {
     ctx.fillStyle = fillGrad;
     ctx.fillRect(left, top, w, h);
 
-    const highlight = marker === 'hold-release' && releaseUrgency > 0.4
-      ? 0.25 + releaseUrgency * 0.35
-      : 0.15 + approach * 0.2;
+    const highlight =
+      marker === 'hold-release' && releaseUrgency > 0.4
+        ? 0.25 + releaseUrgency * 0.35
+        : 0.15 + approach * 0.2;
     ctx.fillStyle = `rgba(255,255,255,${highlight})`;
     ctx.fillRect(left, top, w, Math.max(2, h * 0.28));
 
@@ -1219,9 +1270,10 @@ export class Renderer {
       const bounce = releaseUrgency > 0.45 ? Math.sin(this.time * 16) * releaseUrgency * 3 : 0;
       const arrow = h * (0.16 + releaseUrgency * 0.05);
       const arrowY = cy + bounce;
-      ctx.fillStyle = releaseUrgency > 0.55
-        ? `rgba(255, 235, 120, ${0.85 + releaseUrgency * 0.15})`
-        : 'rgba(255,255,255,0.92)';
+      ctx.fillStyle =
+        releaseUrgency > 0.55
+          ? `rgba(255, 235, 120, ${0.85 + releaseUrgency * 0.15})`
+          : 'rgba(255,255,255,0.92)';
       ctx.beginPath();
       ctx.moveTo(cx, arrowY - arrow * 0.35);
       ctx.lineTo(cx - arrow * 0.7, arrowY + arrow * 0.45);
@@ -1281,13 +1333,20 @@ export class Renderer {
     const warning = stress === 1;
     const stressMix = this.reducedFlash ? severity * 0.35 : severity;
     const basePulse = 0.7 + 0.3 * Math.sin(this.time * 4) + this.screen.perfectPulse * 0.3;
-    const stressPulse = stress >= 1
-      ? basePulse * (0.72 + 0.28 * pulse) * (1 + stressMix * 0.35)
-      : basePulse;
+    const stressPulse =
+      stress >= 1 ? basePulse * (0.72 + 0.28 * pulse) * (1 + stressMix * 0.35) : basePulse;
 
     const lineR = danger ? 255 : warning ? 255 : 0;
-    const lineG = danger ? Math.round(48 + stressMix * 40) : warning ? Math.round(96 + stressMix * 48) : 255;
-    const lineB = danger ? Math.round(64 + stressMix * 24) : warning ? Math.round(48 + stressMix * 16) : 255;
+    const lineG = danger
+      ? Math.round(48 + stressMix * 40)
+      : warning
+        ? Math.round(96 + stressMix * 48)
+        : 255;
+    const lineB = danger
+      ? Math.round(64 + stressMix * 24)
+      : warning
+        ? Math.round(48 + stressMix * 16)
+        : 255;
     const glowColor = danger ? '#ff3355' : warning ? '#ff8833' : '#00ffff';
 
     ctx.shadowColor = glowColor;
@@ -1300,13 +1359,21 @@ export class Renderer {
     ctx.stroke();
 
     const bandH = danger ? 56 : warning ? 48 : 40;
-    const lineGrad = ctx.createLinearGradient(left, this.hitLineY - bandH, left, this.hitLineY + bandH);
+    const lineGrad = ctx.createLinearGradient(
+      left,
+      this.hitLineY - bandH,
+      left,
+      this.hitLineY + bandH,
+    );
     lineGrad.addColorStop(0, 'rgba(0,0,0,0)');
-    lineGrad.addColorStop(0.5, danger
-      ? `rgba(255, 48, 64, ${(0.16 + stressMix * 0.22) * stressPulse})`
-      : warning
-        ? `rgba(255, 112, 48, ${(0.12 + stressMix * 0.16) * stressPulse})`
-        : `rgba(0,255,255,${0.12 * stressPulse})`);
+    lineGrad.addColorStop(
+      0.5,
+      danger
+        ? `rgba(255, 48, 64, ${(0.16 + stressMix * 0.22) * stressPulse})`
+        : warning
+          ? `rgba(255, 112, 48, ${(0.12 + stressMix * 0.16) * stressPulse})`
+          : `rgba(0,255,255,${0.12 * stressPulse})`,
+    );
     lineGrad.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = lineGrad;
     ctx.fillRect(left, this.hitLineY - bandH, right - left, bandH * 2);
@@ -1419,19 +1486,21 @@ export class Renderer {
     const segAreaX = labelX + labelW + 5;
     const segAreaW = headerW - margin * 2 - labelW - 5;
     const segW = (segAreaW - segGap * (segCount - 1)) / segCount;
-    const shake = danger && !this.reducedFlash
-      ? Math.sin(this.time * 22) * (2 + (1 - ratio / DANCE_GAUGE_DANGER_THRESHOLD) * 3)
-      : warning && !this.reducedFlash
-        ? Math.sin(this.time * 14) * 0.8
-        : 0;
+    const shake =
+      danger && !this.reducedFlash
+        ? Math.sin(this.time * 22) * (2 + (1 - ratio / DANCE_GAUGE_DANGER_THRESHOLD) * 3)
+        : warning && !this.reducedFlash
+          ? Math.sin(this.time * 14) * 0.8
+          : 0;
     const stressPulse = danger
       ? 0.55 + 0.45 * Math.sin(this.time * 11)
       : warning
         ? 0.72 + 0.28 * Math.sin(this.time * 7)
         : 1;
-    const pulse = ratio > 0
-      ? (0.86 + 0.14 * Math.sin(this.time * (full ? 8 : 4 + ratio * 4))) * stressPulse
-      : 0.5;
+    const pulse =
+      ratio > 0
+        ? (0.86 + 0.14 * Math.sin(this.time * (full ? 8 : 4 + ratio * 4))) * stressPulse
+        : 0.5;
 
     ctx.save();
     ctx.translate(shake, 0);
@@ -1469,25 +1538,25 @@ export class Renderer {
       const colorT = (i + 0.5) / segCount;
       const segColor = danger
         ? {
-          fill: `rgb(${Math.round(200 + colorT * 30)}, ${Math.round(24 + colorT * 18)}, ${Math.round(40 + colorT * 20)})`,
-          glow: '#ff5577',
-          edge: '#ff99aa',
-        }
+            fill: `rgb(${Math.round(200 + colorT * 30)}, ${Math.round(24 + colorT * 18)}, ${Math.round(40 + colorT * 20)})`,
+            glow: '#ff5577',
+            edge: '#ff99aa',
+          }
         : warning
           ? {
-            fill: `rgb(${Math.round(220 + colorT * 20)}, ${Math.round(80 + colorT * 40)}, ${Math.round(20 + colorT * 10)})`,
-            glow: '#ff9944',
-            edge: '#ffbb77',
-          }
+              fill: `rgb(${Math.round(220 + colorT * 20)}, ${Math.round(80 + colorT * 40)}, ${Math.round(20 + colorT * 10)})`,
+              glow: '#ff9944',
+              edge: '#ffbb77',
+            }
           : getDanceGaugeSegmentColor(i, segCount, this.time, full);
-      const emptyPulse = fill < 0.004 && stress >= 1 && !this.reducedFlash
-        ? 0.1 + 0.08 * Math.sin(this.time * 13 + i * 1.7)
-        : 0;
+      const emptyPulse =
+        fill < 0.004 && stress >= 1 && !this.reducedFlash
+          ? 0.1 + 0.08 * Math.sin(this.time * 13 + i * 1.7)
+          : 0;
 
       this.traceEnergyChevron(sx, barY, segW, barH);
-      ctx.fillStyle = emptyPulse > 0
-        ? `rgba(255, 48, 64, ${emptyPulse})`
-        : 'rgba(14, 10, 20, 0.94)';
+      ctx.fillStyle =
+        emptyPulse > 0 ? `rgba(255, 48, 64, ${emptyPulse})` : 'rgba(14, 10, 20, 0.94)';
       ctx.fill();
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.07)';
       ctx.lineWidth = 1;
@@ -1581,8 +1650,12 @@ export class Renderer {
 
     ctx.save();
     const skyGrad = ctx.createRadialGradient(
-      cx, playMidY, this.width * 0.04,
-      cx, playMidY, this.width * 0.55,
+      cx,
+      playMidY,
+      this.width * 0.04,
+      cx,
+      playMidY,
+      this.width * 0.55,
     );
     const rgb = danger ? '255, 32, 48' : '255, 96, 40';
     skyGrad.addColorStop(0, `rgba(${rgb}, ${(0.08 + mix * 0.14 * pulse) * (danger ? 1 : 0.75)})`);
@@ -1696,7 +1769,12 @@ export class Renderer {
 
     ctx.save();
     ctx.beginPath();
-    ctx.rect(left, this.laneTopY + this.gaugeBandH, right - left, this.laneBottomY - this.laneTopY - this.gaugeBandH);
+    ctx.rect(
+      left,
+      this.laneTopY + this.gaugeBandH,
+      right - left,
+      this.laneBottomY - this.laneTopY - this.gaugeBandH,
+    );
     ctx.clip();
 
     const bandGrad = ctx.createLinearGradient(left, y - bandH, left, y + bandH);
@@ -1729,7 +1807,7 @@ export class Renderer {
 
   private drawDanceGaugeStressVignette(gauge: number, metrics: PlayfieldStressMetrics) {
     const ctx = this.ctx;
-    const { stress, severity, pulse } = metrics;
+    const { stress, pulse } = metrics;
     const ratio = clampDanceGauge(gauge);
     const threshold = stress >= 2 ? DANCE_GAUGE_DANGER_THRESHOLD : DANCE_GAUGE_WARNING_THRESHOLD;
     const vignetteSeverity = Math.min(1, 1 - ratio / threshold) * (stress >= 2 ? 1 : 0.55);
@@ -1739,18 +1817,34 @@ export class Renderer {
     ctx.save();
 
     const vignette = ctx.createRadialGradient(
-      this.width * 0.5, this.height * 0.38, this.width * 0.06,
-      this.width * 0.5, this.height * 0.42, this.width * 0.82,
+      this.width * 0.5,
+      this.height * 0.38,
+      this.width * 0.06,
+      this.width * 0.5,
+      this.height * 0.42,
+      this.width * 0.82,
     );
-    vignette.addColorStop(0, `rgba(255, 24, 48, ${(0.05 + vignetteSeverity * 0.1 * pulse) * redScale * flashScale})`);
-    vignette.addColorStop(0.55, `rgba(180, 0, 32, ${(0.1 + vignetteSeverity * 0.18 * pulse) * redScale * flashScale})`);
-    vignette.addColorStop(1, `rgba(80, 0, 16, ${(0.18 + vignetteSeverity * 0.2) * redScale * flashScale})`);
+    vignette.addColorStop(
+      0,
+      `rgba(255, 24, 48, ${(0.05 + vignetteSeverity * 0.1 * pulse) * redScale * flashScale})`,
+    );
+    vignette.addColorStop(
+      0.55,
+      `rgba(180, 0, 32, ${(0.1 + vignetteSeverity * 0.18 * pulse) * redScale * flashScale})`,
+    );
+    vignette.addColorStop(
+      1,
+      `rgba(80, 0, 16, ${(0.18 + vignetteSeverity * 0.2) * redScale * flashScale})`,
+    );
     ctx.fillStyle = vignette;
     ctx.fillRect(0, 0, this.width, this.height);
 
     if (stress >= 2) {
       const topWash = ctx.createLinearGradient(0, 0, 0, this.height * 0.38);
-      topWash.addColorStop(0, `rgba(255, 40, 60, ${(0.18 + vignetteSeverity * 0.22 * pulse) * flashScale})`);
+      topWash.addColorStop(
+        0,
+        `rgba(255, 40, 60, ${(0.18 + vignetteSeverity * 0.22 * pulse) * flashScale})`,
+      );
       topWash.addColorStop(1, 'rgba(255, 0, 0, 0)');
       ctx.fillStyle = topWash;
       ctx.fillRect(0, 0, this.width, this.height * 0.38);
@@ -1819,8 +1913,12 @@ export class Renderer {
     ctx.save();
 
     const edgeVignette = ctx.createRadialGradient(
-      cx, cy, this.width * 0.24,
-      cx, cy, this.width * 0.92,
+      cx,
+      cy,
+      this.width * 0.24,
+      cx,
+      cy,
+      this.width * 0.92,
     );
     edgeVignette.addColorStop(0, 'rgba(0, 0, 0, 0)');
     edgeVignette.addColorStop(0.7, `rgba(16, 0, 6, ${0.14 * eased * flashScale})`);
@@ -1829,19 +1927,18 @@ export class Renderer {
     ctx.fillRect(0, 0, this.width, this.height);
 
     const playBloom = ctx.createRadialGradient(
-      playCx, playCy, 0,
-      playCx, playCy, Math.max(playRight - playLeft, playBottom - playTop) * 0.92,
+      playCx,
+      playCy,
+      0,
+      playCx,
+      playCy,
+      Math.max(playRight - playLeft, playBottom - playTop) * 0.92,
     );
     playBloom.addColorStop(0, `rgba(255, 40, 60, ${0.2 * pulse * eased * flashScale})`);
     playBloom.addColorStop(0.5, `rgba(255, 24, 40, ${0.09 * pulse * eased * flashScale})`);
     playBloom.addColorStop(1, 'rgba(255, 0, 0, 0)');
     ctx.fillStyle = playBloom;
-    ctx.fillRect(
-      playLeft - 24,
-      playTop - 16,
-      playRight - playLeft + 48,
-      playBottom - playTop + 32,
-    );
+    ctx.fillRect(playLeft - 24, playTop - 16, playRight - playLeft + 48, playBottom - playTop + 32);
 
     const edgeW = Math.min(44, this.width * 0.055);
     const leftEdge = ctx.createLinearGradient(0, 0, edgeW, 0);
@@ -1860,7 +1957,12 @@ export class Renderer {
     textBloom.addColorStop(0, `rgba(255, 48, 72, ${0.16 * pulse * eased * flashScale})`);
     textBloom.addColorStop(1, 'rgba(255, 0, 0, 0)');
     ctx.fillStyle = textBloom;
-    ctx.fillRect(cx - this.width * 0.28, cy - this.height * 0.18, this.width * 0.56, this.height * 0.36);
+    ctx.fillRect(
+      cx - this.width * 0.28,
+      cy - this.height * 0.18,
+      this.width * 0.56,
+      this.height * 0.36,
+    );
 
     const fontSize = Math.round(Math.min(78, this.width * 0.14) * (0.82 + eased * 0.18));
     ctx.textAlign = 'center';
@@ -1884,116 +1986,20 @@ export class Renderer {
     ctx.restore();
   }
 
-  private drawHudOutlinedText(
-    text: string,
-    x: number,
-    y: number,
-    fillStyle: string,
-    options?: { outlineWidth?: number; shadowColor?: string; shadowBlur?: number },
-  ): void {
-    const ctx = this.ctx;
-    const outlineWidth = options?.outlineWidth ?? 3;
-    const prevFill = ctx.fillStyle;
-    const prevStroke = ctx.strokeStyle;
-    const prevWidth = ctx.lineWidth;
-    const prevJoin = ctx.lineJoin;
-    const prevMiter = ctx.miterLimit;
-    const prevShadowColor = ctx.shadowColor;
-    const prevShadowBlur = ctx.shadowBlur;
-
-    ctx.lineJoin = 'round';
-    ctx.miterLimit = 2;
-    ctx.lineWidth = outlineWidth;
-    ctx.strokeStyle = '#000';
-    ctx.shadowBlur = 0;
-    ctx.strokeText(text, x, y);
-
-    ctx.fillStyle = fillStyle;
-    if (options?.shadowColor) {
-      ctx.shadowColor = options.shadowColor;
-      ctx.shadowBlur = options.shadowBlur ?? 0;
-    }
-    ctx.fillText(text, x, y);
-
-    ctx.fillStyle = prevFill;
-    ctx.strokeStyle = prevStroke;
-    ctx.lineWidth = prevWidth;
-    ctx.lineJoin = prevJoin;
-    ctx.miterLimit = prevMiter;
-    ctx.shadowColor = prevShadowColor;
-    ctx.shadowBlur = prevShadowBlur;
-  }
-
-  private drawHUD(stats: GameStats, chart: ChartData, currentTime: number) {
-    const ctx = this.ctx;
-    const margin = Renderer.LANE_MARGIN_LEFT;
-    const hudRightX = this.width - margin;
-    const scoreX = this.getPlayfieldCenterX();
-
-    ctx.save();
-
-    // 曲名・BPMなど — 画面右上
-    ctx.textAlign = 'right';
-    ctx.font = '900 14px "Noto Sans JP", sans-serif';
-    this.drawHudOutlinedText(chart.title, hudRightX, 30, 'rgba(255,255,255,0.92)');
-    this.drawHudOutlinedText(
-      `${chart.bpm} BPM · ${getGenreLabel(resolveGenre(chart))}`,
-      hudRightX,
-      50,
-      'rgba(255,255,255,0.85)',
+  private drawHUD(stats: GameStats, chart: ChartData, _currentTime: number) {
+    drawPlayHud(
+      this.ctx,
+      {
+        width: this.width,
+        laneMarginRight: Renderer.LANE_MARGIN_LEFT,
+        scoreCenterX: this.getPlayfieldCenterX(),
+        songDuration: this.songDuration,
+        scrollSpeed: this.scrollSpeed,
+        time: this.time,
+      },
+      stats,
+      chart,
     );
-
-    if (this.songDuration > 0) {
-      ctx.font = '900 12px "Noto Sans JP", sans-serif';
-      const scrollBpm = Math.round(chart.bpm * this.scrollSpeed);
-      this.drawHudOutlinedText(
-        `×${this.scrollSpeed.toFixed(2)}  (${scrollBpm})`,
-        hudRightX,
-        70,
-        'rgba(120, 220, 255, 0.92)',
-      );
-    }
-
-    const total = stats.perfect + stats.great + stats.good + stats.bad + stats.miss;
-    if (total > 0) {
-      const acc = ((stats.perfect + stats.great * 0.7 + stats.good * 0.4) / total * 100).toFixed(1);
-      const tier = getAccuracyTier(stats);
-      const tierStyle = tier ? ACCURACY_MILESTONE_STYLE[tier] : null;
-      const tierPulse = tier === 95 ? 0.22 + Math.sin(this.time * 10) * 0.12
-        : tier === 90 ? 0.14 + Math.sin(this.time * 8) * 0.08
-        : tier === 80 ? 0.08 + Math.sin(this.time * 6) * 0.05
-        : 0;
-
-      ctx.font = '900 11px Orbitron, sans-serif';
-      const accLabelColor = tierStyle ? tierStyle.color : 'rgba(255, 255, 255, 0.88)';
-      this.drawHudOutlinedText(t('ui.acc'), hudRightX, 92, accLabelColor, tierStyle ? {
-        shadowColor: tierStyle.color,
-        shadowBlur: 8 + tierPulse * 20,
-      } : undefined);
-      ctx.font = '900 22px Orbitron, sans-serif';
-      const accValueColor = tierStyle ? tierStyle.color : 'rgba(255, 255, 255, 0.95)';
-      this.drawHudOutlinedText(`${acc}%`, hudRightX, 116, accValueColor, tierStyle ? {
-        shadowColor: tierStyle.color,
-        shadowBlur: 12 + tierPulse * 28,
-        outlineWidth: 3.5,
-      } : undefined);
-    }
-
-    // スコア — レーン中央上
-    const scoreLabelY = 50;
-    const scoreValueY = 84;
-    ctx.textAlign = 'center';
-    ctx.font = 'bold 11px Orbitron, sans-serif';
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
-    ctx.fillText(t('ui.score'), scoreX, scoreLabelY);
-    ctx.font = 'bold 38px Orbitron, sans-serif';
-    ctx.fillStyle = '#ffffff';
-    ctx.shadowColor = '#00ffff';
-    ctx.shadowBlur = 14;
-    ctx.fillText(stats.score.toLocaleString(), scoreX, scoreValueY);
-    ctx.shadowBlur = 0;
-
-    ctx.restore();
   }
 
   private drawAccuracyMilestoneBanner() {
@@ -2010,9 +2016,12 @@ export class Renderer {
     ctx.globalAlpha = banner.alpha;
 
     const glowR = banner.tier === 95 ? 120 : banner.tier === 90 ? 100 : 80;
-    const burstColor = banner.tier === 95 ? 'rgba(255, 215, 0, 0.35)'
-      : banner.tier === 90 ? 'rgba(0, 229, 255, 0.32)'
-      : 'rgba(152, 251, 152, 0.28)';
+    const burstColor =
+      banner.tier === 95
+        ? 'rgba(255, 215, 0, 0.35)'
+        : banner.tier === 90
+          ? 'rgba(0, 229, 255, 0.32)'
+          : 'rgba(152, 251, 152, 0.28)';
     const burst = ctx.createRadialGradient(0, 0, 0, 0, 0, glowR);
     burst.addColorStop(0, burstColor);
     burst.addColorStop(1, 'transparent');
@@ -2055,13 +2064,22 @@ export class Renderer {
       const playCx = (playLeft + playRight) / 2;
       const playCy = (playTop + playBottom) / 2;
       const bloom = ctx.createRadialGradient(
-        playCx, playCy, 0,
-        playCx, playCy, Math.max(playRight - playLeft, playBottom - playTop) * 0.75,
+        playCx,
+        playCy,
+        0,
+        playCx,
+        playCy,
+        Math.max(playRight - playLeft, playBottom - playTop) * 0.75,
       );
       bloom.addColorStop(0, `rgba(255, 32, 48, ${alpha * 0.55})`);
       bloom.addColorStop(1, 'rgba(255, 24, 48, 0)');
       ctx.fillStyle = bloom;
-      ctx.fillRect(playLeft - 12, playTop - 8, playRight - playLeft + 24, playBottom - playTop + 16);
+      ctx.fillRect(
+        playLeft - 12,
+        playTop - 8,
+        playRight - playLeft + 24,
+        playBottom - playTop + 16,
+      );
     }
 
     const laneFlash = this.screen.missFlash * (this.reducedFlash ? 0.25 : 0.42);

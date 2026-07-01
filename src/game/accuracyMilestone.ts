@@ -46,7 +46,8 @@ export function getAccuracyTier(stats: GameStats): AccuracyTier | null {
 }
 
 export function canCelebrateAccuracy(stats: GameStats): boolean {
-  const total = stats.perfect + stats.great + stats.good + stats.bad + stats.miss;
+  const total =
+    (stats.marvelous ?? 0) + stats.perfect + stats.great + stats.good + stats.bad + stats.miss;
   return total >= 8;
 }
 

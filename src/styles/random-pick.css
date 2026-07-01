@@ -81,7 +81,14 @@
 .random-pick-stage-fx.random-pick-fx--spin .random-pick-fx-card {
   padding: 1rem 3rem;
   border-radius: 999px;
-  background: linear-gradient(105deg, #fffce8 0%, #ffe033 24%, #ff9a00 52%, #ffe566 78%, #fff8d0 100%);
+  background: linear-gradient(
+    105deg,
+    #fffce8 0%,
+    #ffe033 24%,
+    #ff9a00 52%,
+    #ffe566 78%,
+    #fff8d0 100%
+  );
   background-size: 240% 100%;
   border: 3px solid rgba(255, 255, 255, 0.96);
   animation:
@@ -175,50 +182,99 @@
   inset: -30% -12%;
   z-index: -1;
   border-radius: 999px;
-  background: radial-gradient(ellipse at center, rgba(255, 0, 127, 0.38), rgba(0, 243, 255, 0.2) 45%, transparent 72%);
+  background: radial-gradient(
+    ellipse at center,
+    rgba(255, 0, 127, 0.38),
+    rgba(0, 243, 255, 0.2) 45%,
+    transparent 72%
+  );
   filter: blur(12px);
   animation: random-pick-decide-halo 0.72s ease-in-out infinite;
   pointer-events: none;
 }
 
 @keyframes random-pick-veil-pulse {
-  0%, 100% { opacity: 0.88; filter: brightness(1); }
-  50% { opacity: 1; filter: brightness(1.18); }
+  0%,
+  100% {
+    opacity: 0.88;
+    filter: brightness(1);
+  }
+  50% {
+    opacity: 1;
+    filter: brightness(1.18);
+  }
 }
 
 @keyframes random-pick-ring-expand {
-  0% { opacity: 0.85; scale: 0.94; }
-  70% { opacity: 0.2; scale: 1.08; }
-  100% { opacity: 0; scale: 1.12; }
+  0% {
+    opacity: 0.85;
+    scale: 0.94;
+  }
+  70% {
+    opacity: 0.2;
+    scale: 1.08;
+  }
+  100% {
+    opacity: 0;
+    scale: 1.12;
+  }
 }
 
 @keyframes random-pick-ring-spin {
-  to { rotate: 360deg; }
+  to {
+    rotate: 360deg;
+  }
 }
 
 @keyframes random-pick-spin-pill-shine {
-  to { background-position: 200% 50%; }
+  to {
+    background-position: 200% 50%;
+  }
 }
 
 @keyframes random-pick-spin-pill-beat {
-  from { transform: scale(1); }
-  to { transform: scale(1.06); }
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.06);
+  }
 }
 
 @keyframes random-pick-spin-pill-orbit {
-  0% { opacity: 0.35; transform: rotate(0deg); }
-  50% { opacity: 1; }
-  100% { opacity: 0.35; transform: rotate(360deg); }
+  0% {
+    opacity: 0.35;
+    transform: rotate(0deg);
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.35;
+    transform: rotate(360deg);
+  }
 }
 
 @keyframes random-pick-spin-text-flicker {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.82; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.82;
+  }
 }
 
 @keyframes random-pick-soon-pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.72; transform: scale(1.04); }
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.72;
+    transform: scale(1.04);
+  }
 }
 
 @keyframes random-pick-decide-pop {
@@ -235,7 +291,8 @@
 }
 
 @keyframes random-pick-decide-aura-blink {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
     transform: scale(1);
     text-shadow:
@@ -258,8 +315,15 @@
 }
 
 @keyframes random-pick-decide-halo {
-  0%, 100% { opacity: 0.55; transform: scale(0.96); }
-  50% { opacity: 1; transform: scale(1.08); }
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
 }
 
 @keyframes random-pick-decide-burst {
@@ -363,8 +427,14 @@
 }
 
 @keyframes random-pick-fly-shimmer {
-  from { background-position: 0% 50%; filter: brightness(1); }
-  to { background-position: 100% 50%; filter: brightness(1.25); }
+  from {
+    background-position: 0% 50%;
+    filter: brightness(1);
+  }
+  to {
+    background-position: 100% 50%;
+    filter: brightness(1.25);
+  }
 }
 
 .folder-song-item.is-random-pick-source {
@@ -501,7 +571,8 @@
 }
 
 @keyframes random-pick-center-glow {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow:
       0 10px 32px rgba(0, 0, 0, 0.34),
       0 0 28px rgba(255, 200, 40, 0.35),
@@ -546,8 +617,13 @@ body.reduced-flash .random-pick-stage-fx.random-pick-fx--decide .random-pick-fx-
 }
 
 @keyframes random-pick-decide-aura-blink-lite {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.55; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
 }
 
 body.reduced-flash .select-hub-screen.is-random-pick-decide .random-pick-fx-card,
@@ -557,8 +633,13 @@ body.reduced-flash .random-pick-stage-fx.random-pick-fx--decide .random-pick-fx-
 }
 
 @keyframes random-pick-center-flash-lite {
-  0%, 100% { border-color: rgba(0, 200, 255, 0.16); }
-  50% { border-color: rgba(255, 210, 40, 0.75); }
+  0%,
+  100% {
+    border-color: rgba(0, 200, 255, 0.16);
+  }
+  50% {
+    border-color: rgba(255, 210, 40, 0.75);
+  }
 }
 
 body.reduced-flash #song-ring-center.is-random-pick-locked-panel {

@@ -1,0 +1,114 @@
+/* Loading */
+.loading-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 3px solid rgba(0, 229, 255, 0.2);
+  border-top-color: #00e5ff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loading-text {
+  font-family: 'Orbitron', sans-serif;
+  color: rgba(255, 255, 255, 0.6);
+  letter-spacing: 0.1em;
+}
+
+.loading-progress {
+  width: min(320px, 80vw);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.loading-progress-track {
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(0, 229, 255, 0.12);
+  overflow: hidden;
+}
+
+.loading-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #00e5ff, #b388ff);
+  transition: width 0.2s ease;
+}
+
+.loading-progress-label {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.45);
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+
+.error-text {
+  color: #ff2d6a;
+  font-size: 0.95rem;
+}
+
+.scroll-speed-panel {
+  max-width: 400px;
+  margin: 0 0 1.25rem;
+  padding: 1rem 1.25rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(0, 229, 255, 0.15);
+  border-radius: 12px;
+}
+
+.scroll-speed-panel .setting-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0;
+  flex-wrap: nowrap;
+}
+
+.scroll-speed-panel .setting-row > span:first-child {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  font-size: 0.75rem;
+}
+
+.scroll-speed-panel .has-tooltip::after {
+  margin-left: 0.2rem;
+  width: 0.8rem;
+  height: 0.8rem;
+  font-size: 0.55rem;
+  line-height: 0.8rem;
+}
+
+.scroll-speed-panel .setting-row input[type='range'] {
+  flex: 1 1 9rem;
+  width: auto;
+  min-width: 8rem;
+  max-width: 14rem;
+}
+
+.scroll-speed-panel .setting-value {
+  flex: 0 0 auto;
+  min-width: 2.4rem;
+  white-space: nowrap;
+  font-size: 0.72rem;
+  text-align: right;
+}
+
+.scroll-speed-panel .setting-hint {
+  margin-top: 0.25rem;
+  margin-bottom: 0;
+}

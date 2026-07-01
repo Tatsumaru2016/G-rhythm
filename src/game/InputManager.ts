@@ -17,20 +17,28 @@ export class InputManager {
   bindTouchZones(zones: HTMLElement[]) {
     zones.forEach((zone, i) => {
       const lane = i as LaneIndex;
-      zone.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        for (const t of e.changedTouches) this.touchLaneMap.set(t.identifier, lane);
-        this.setLane(lane, true);
-      }, { passive: false });
-      zone.addEventListener('touchend', (e) => {
-        e.preventDefault();
-        for (const t of e.changedTouches) {
-          if (this.touchLaneMap.get(t.identifier) === lane) {
-            this.touchLaneMap.delete(t.identifier);
-            this.setLane(lane, false);
+      zone.addEventListener(
+        'touchstart',
+        (e) => {
+          e.preventDefault();
+          for (const t of e.changedTouches) this.touchLaneMap.set(t.identifier, lane);
+          this.setLane(lane, true);
+        },
+        { passive: false },
+      );
+      zone.addEventListener(
+        'touchend',
+        (e) => {
+          e.preventDefault();
+          for (const t of e.changedTouches) {
+            if (this.touchLaneMap.get(t.identifier) === lane) {
+              this.touchLaneMap.delete(t.identifier);
+              this.setLane(lane, false);
+            }
           }
-        }
-      }, { passive: false });
+        },
+        { passive: false },
+      );
       zone.addEventListener('touchcancel', (e) => {
         for (const t of e.changedTouches) {
           if (this.touchLaneMap.get(t.identifier) === lane) {
@@ -63,7 +71,7 @@ export class InputManager {
   private onKeyDown = (e: KeyboardEvent) => {
     if (e.repeat) return;
     const lane = this.resolveLane(e.key);
-    if (lane >= 0) {
+    if (lane !== -1) {
       e.preventDefault();
       this.setLane(lane, true);
     }
@@ -71,16 +79,16 @@ export class InputManager {
 
   private onKeyUp = (e: KeyboardEvent) => {
     const lane = this.resolveLane(e.key);
-    if (lane >= 0) {
+    if (lane !== -1) {
       e.preventDefault();
       this.setLane(lane, false);
     }
   };
 
   private resolveLane(key: string): LaneIndex | -1 {
-    const letter = LANE_KEYS.indexOf(key.toLowerCase() as typeof LANE_KEYS[number]);
+    const letter = LANE_KEYS.indexOf(key.toLowerCase() as (typeof LANE_KEYS)[number]);
     if (letter >= 0) return letter as LaneIndex;
-    const arrow = LANE_ARROW_KEYS.indexOf(key as typeof LANE_ARROW_KEYS[number]);
+    const arrow = LANE_ARROW_KEYS.indexOf(key as (typeof LANE_ARROW_KEYS)[number]);
     if (arrow >= 0) return arrow as LaneIndex;
     return -1;
   }

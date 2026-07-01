@@ -12,6 +12,7 @@ export const DANCE_GAUGE_FULL_THRESHOLD = 0.995;
  *  Perfect +2 / Great +1 / Good 0 / Boo -4 / Miss -8 / 落ち -10
  *  ノーツ落ち（未入力スルー）は BAD・押して Miss より重い。スコアはいずれも加点なし。 */
 export const DANCE_GAUGE_DELTA: Record<JudgmentType, number> = {
+  marvelous: 0.025,
   perfect: 0.02,
   great: 0.01,
   good: 0,
@@ -20,7 +21,7 @@ export const DANCE_GAUGE_DELTA: Record<JudgmentType, number> = {
 };
 
 /** ノーツ落ち（キー未入力で通過）— BAD(-4%)・押下Miss(-8%)より大きく減少 */
-export const DANCE_GAUGE_DROP_DELTA = -0.10;
+export const DANCE_GAUGE_DROP_DELTA = -0.1;
 
 const GAUGE_DELTA = DANCE_GAUGE_DELTA;
 
@@ -31,7 +32,7 @@ const ENERGY_GRADIENT_STOPS = [
   { t: 0.28, r: 255, g: 106, b: 0 },
   { t: 0.42, r: 255, g: 204, b: 0 },
   { t: 0.56, r: 136, g: 255, b: 0 },
-  { t: 0.70, r: 0, g: 230, b: 118 },
+  { t: 0.7, r: 0, g: 230, b: 118 },
   { t: 0.84, r: 0, g: 229, b: 255 },
   { t: 1.0, r: 179, g: 240, b: 255 },
 ] as const;

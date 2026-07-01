@@ -1,4 +1,6 @@
-export type Locale = 'ja' | 'en';
+import type { Locale } from '../i18n/messages';
+
+export type { Locale };
 
 const STORAGE_KEY = 'g-rhythm-locale';
 
@@ -38,12 +40,16 @@ export function loadLocale(): Locale {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored === 'ja' || stored === 'en') return stored;
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return detectDefaultLocale();
 }
 
 export function saveLocale(locale: Locale): void {
   try {
     localStorage.setItem(STORAGE_KEY, locale);
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }

@@ -1,10 +1,6 @@
 import type { ChartData, ChartNote, LaneIndex, MusicGenre } from '../types';
 import { chartDisplayLevel } from '../chart/chartRadar';
-import {
-  analyzeGenre,
-  getGenreChartModifiers,
-  type GenreChartModifiers,
-} from './musicGenre';
+import { analyzeGenre, getGenreChartModifiers, type GenreChartModifiers } from './musicGenre';
 import { detectOnsets, type AudioOnset } from './onsetDetection';
 
 export type CustomDifficulty = 'EASY' | 'NORMAL' | 'HARD' | 'EXTREME';
@@ -51,7 +47,7 @@ const DIFFICULTY_CONFIG: Record<CustomDifficulty, DifficultyConfig> = {
     fallbackStep: 8,
   },
   HARD: {
-    minGapSec: 0.30,
+    minGapSec: 0.3,
     minBeatGap: 4,
     holdChance: false,
     holdEnergy: 0.14,
@@ -96,12 +92,7 @@ function quantizeToBeat(time: number, bpm: number, offset: number, lpb: number):
   return Math.round(adjusted / step);
 }
 
-function pickLane(
-  beat: number,
-  energy: number,
-  prevLane: LaneIndex,
-  smooth: boolean,
-): LaneIndex {
+function pickLane(beat: number, energy: number, prevLane: LaneIndex, smooth: boolean): LaneIndex {
   const lanes: LaneIndex[] = [0, 1, 2, 3];
   const energyBias = energy > 0.08 ? 1 : 0;
   const idx = (beat + energyBias) % 4;
@@ -122,7 +113,7 @@ function pickChordLanes(baseLane: LaneIndex, maxLanes: number): LaneIndex[] {
   const target = Math.min(4, Math.max(2, maxLanes));
   let guard = 0;
   while (lanes.size < target && guard++ < 12) {
-    lanes.add((Math.floor(Math.random() * 4)) as LaneIndex);
+    lanes.add(Math.floor(Math.random() * 4) as LaneIndex);
   }
   return [...lanes];
 }
@@ -134,9 +125,10 @@ function notesAtBeat(
   cfg: DifficultyConfig,
 ): ChartNote[] {
   const onHoldGrid = beat % cfg.holdBeatMod === 0;
-  const isHold = cfg.holdChance
-    && onHoldGrid
-    && (onset.energy > cfg.holdEnergy || Math.random() < cfg.holdSpawnChance);
+  const isHold =
+    cfg.holdChance &&
+    onHoldGrid &&
+    (onset.energy > cfg.holdEnergy || Math.random() < cfg.holdSpawnChance);
 
   if (isHold) {
     return [{ lane, beat, type: 'hold', duration: cfg.holdDuration }];
@@ -205,7 +197,8 @@ export function generateChart(
     const beat = quantizeToBeat(onset.time, bpm, offset, lpb);
     if (beat < 0 || usedBeats.has(beat)) continue;
     if (beat - lastPlacedBeat < cfg.minBeatGap) continue;
-    if (!isEmphasizedBeat(beat, lpb, genreMod.beatEmphasis) && onset.energy < cfg.holdEnergy * 1.2) continue;
+    if (!isEmphasizedBeat(beat, lpb, genreMod.beatEmphasis) && onset.energy < cfg.holdEnergy * 1.2)
+      continue;
 
     usedBeats.add(beat);
     lastPlacedBeat = beat;
@@ -222,7 +215,7 @@ export function generateChart(
     const totalBeats = Math.floor((buffer.duration - offset) / (60 / bpm)) * lpb;
     for (let b = 0; b < totalBeats && notes.length < 30; b += cfg.fallbackStep) {
       if (usedBeats.has(b)) continue;
-      notes.push({ lane: (b / cfg.fallbackStep % 4) as LaneIndex, beat: b, type: 'tap' });
+      notes.push({ lane: ((b / cfg.fallbackStep) % 4) as LaneIndex, beat: b, type: 'tap' });
       usedBeats.add(b);
     }
   }

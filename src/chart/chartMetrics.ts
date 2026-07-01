@@ -124,7 +124,11 @@ function spreadRadar(norm01: number, gamma = RADAR_GAMMA): number {
   return clamp100(Math.pow(clamp01(norm01), gamma) * 100);
 }
 
-function computeHoldMetrics(notes: ChartNote[], chart: ChartData, songSec: number): {
+function computeHoldMetrics(
+  notes: ChartNote[],
+  chart: ChartData,
+  songSec: number,
+): {
   holdHeadRate: number;
   holdOccupancy: number;
 } {
@@ -139,9 +143,7 @@ function computeHoldMetrics(notes: ChartNote[], chart: ChartData, songSec: numbe
   for (const n of notes) {
     if (n.type !== 'hold') continue;
     holdHeads++;
-    const quarters = n.duration && n.duration > 0
-      ? n.duration / chart.lpb
-      : 0.25;
+    const quarters = n.duration && n.duration > 0 ? n.duration / chart.lpb : 0.25;
     holdSec += quarters * quarterSec;
   }
 
@@ -175,7 +177,9 @@ function isJumpRow(notes: ChartNote[]): boolean {
   return Math.max(...lanes) - Math.min(...lanes) >= 2;
 }
 
-function classifyDivisionGap(gapQuarters: number): 'eighth' | 'twelfth' | 'sixteenth' | 'fast' | 'other' {
+function classifyDivisionGap(
+  gapQuarters: number,
+): 'eighth' | 'twelfth' | 'sixteenth' | 'fast' | 'other' {
   const tol = 0.06;
   if (Math.abs(gapQuarters - 0.5) <= tol) return 'eighth';
   if (Math.abs(gapQuarters - 1 / 3) <= tol) return 'twelfth';
@@ -235,9 +239,8 @@ function computeStaminaIndex(chart: ChartData, songSec: number): number {
 
     if (nps >= TYPICAL.avgNps * 0.72) {
       runDensity += nps;
-      runSec += beats[i + 1] !== undefined
-        ? Math.max(0, (beats[i + 1] - beats[i]) * beatDur)
-        : beatDur;
+      runSec +=
+        beats[i + 1] !== undefined ? Math.max(0, (beats[i + 1] - beats[i]) * beatDur) : beatDur;
     } else if (runSec > 0) {
       best = Math.max(best, (runDensity / Math.max(1, runSec)) * runSec);
       runDensity = 0;
@@ -247,7 +250,7 @@ function computeStaminaIndex(chart: ChartData, songSec: number): number {
   if (runSec > 0) best = Math.max(best, runDensity);
 
   const lengthFactor = Math.min(1.4, songSec / 120);
-  return (peakDensity * 0.45 + best * 0.55) * lengthFactor / TYPICAL.maxNps;
+  return ((peakDensity * 0.45 + best * 0.55) * lengthFactor) / TYPICAL.maxNps;
 }
 
 function computeTechIndex(
@@ -340,9 +343,7 @@ export function computeChartRawMetrics(chart: ChartData): ChartRawMetrics {
     gaps.push((rowKeys[i] - rowKeys[i - 1]) / chart.lpb);
   }
   const gapMean = gaps.length ? gaps.reduce((s, g) => s + g, 0) / gaps.length : 0;
-  const gapVar = gaps.length
-    ? gaps.reduce((s, g) => s + (g - gapMean) ** 2, 0) / gaps.length
-    : 0;
+  const gapVar = gaps.length ? gaps.reduce((s, g) => s + (g - gapMean) ** 2, 0) / gaps.length : 0;
   const gapCv = gapMean > 0 ? Math.sqrt(gapVar) / gapMean : 0;
   const offbeat = gaps.filter((g) => {
     const near = (target: number) => Math.abs(g - target) < 0.07;
@@ -404,11 +405,12 @@ export function computeChartRawMetrics(chart: ChartData): ChartRawMetrics {
 }
 
 export function normalizeChartMetrics(raw: ChartRawMetrics): ChartNormalizedMetrics {
-  const divisionMix = (raw.eighthRatio + raw.twelfthRatio + raw.sixteenthRatio + raw.fastDivisionRatio) * 0.25;
+  const divisionMix =
+    (raw.eighthRatio + raw.twelfthRatio + raw.sixteenthRatio + raw.fastDivisionRatio) * 0.25;
   const chaos = clamp01(
-    normLinear(raw.rhythmDifficulty, TYPICAL.rhythm) * 0.52
-    + normLinear(divisionMix, TYPICAL.divisionMix) * 0.28
-    + normLinear(raw.stopCount, TYPICAL.stopCount) * 0.20,
+    normLinear(raw.rhythmDifficulty, TYPICAL.rhythm) * 0.52 +
+      normLinear(divisionMix, TYPICAL.divisionMix) * 0.28 +
+      normLinear(raw.stopCount, TYPICAL.stopCount) * 0.2,
   );
 
   return {
@@ -444,7 +446,10 @@ export function metricsToRadarAxes(norm: ChartNormalizedMetrics): ChartRadarAxes
   };
 }
 
-export function metricsToTraitIndices(norm: ChartNormalizedMetrics, axes: ChartRadarAxes): ChartTraitIndices {
+export function metricsToTraitIndices(
+  norm: ChartNormalizedMetrics,
+  axes: ChartRadarAxes,
+): ChartTraitIndices {
   return {
     stamina: axes.voltage,
     technical: axes.air,
@@ -456,13 +461,13 @@ export function metricsToTraitIndices(norm: ChartNormalizedMetrics, axes: ChartR
 
 export function computeWeightedDifficulty(norm: ChartNormalizedMetrics): number {
   return clamp01(
-    DIFFICULTY_WEIGHTS.bpm * norm.bpm
-    + DIFFICULTY_WEIGHTS.avgNps * norm.avgNps
-    + DIFFICULTY_WEIGHTS.maxNps * norm.maxNps
-    + DIFFICULTY_WEIGHTS.jump * norm.jump
-    + DIFFICULTY_WEIGHTS.freeze * norm.freeze
-    + DIFFICULTY_WEIGHTS.chaos * norm.chaos
-    + DIFFICULTY_WEIGHTS.cross * norm.cross,
+    DIFFICULTY_WEIGHTS.bpm * norm.bpm +
+      DIFFICULTY_WEIGHTS.avgNps * norm.avgNps +
+      DIFFICULTY_WEIGHTS.maxNps * norm.maxNps +
+      DIFFICULTY_WEIGHTS.jump * norm.jump +
+      DIFFICULTY_WEIGHTS.freeze * norm.freeze +
+      DIFFICULTY_WEIGHTS.chaos * norm.chaos +
+      DIFFICULTY_WEIGHTS.cross * norm.cross,
   );
 }
 

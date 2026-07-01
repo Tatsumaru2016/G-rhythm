@@ -28,10 +28,7 @@ function seedRandom(seed: number): () => number {
 }
 
 function trimBuffer(buffer: AudioBuffer, maxDurationSec: number): AudioBuffer {
-  const maxSamples = Math.min(
-    buffer.length,
-    Math.floor(buffer.sampleRate * maxDurationSec),
-  );
+  const maxSamples = Math.min(buffer.length, Math.floor(buffer.sampleRate * maxDurationSec));
   if (maxSamples >= buffer.length) return buffer;
 
   const channels = buffer.numberOfChannels;
@@ -64,7 +61,12 @@ function capNotes(notes: ChartNote[], maxNotes: number): ChartNote[] {
   return picked;
 }
 
-function levelFromSyncedChart(chart: ChartData, notes: ChartNote[], bpm: number, genre: MusicGenre): number {
+function levelFromSyncedChart(
+  chart: ChartData,
+  notes: ChartNote[],
+  bpm: number,
+  genre: MusicGenre,
+): number {
   return chartDisplayLevel({
     ...chart,
     bpm,

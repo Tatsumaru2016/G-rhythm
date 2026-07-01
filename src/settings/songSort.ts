@@ -1,14 +1,7 @@
 import type { MessageKey } from '../i18n/messages';
 
 export type SongSortKey =
-  | 'default'
-  | 'title'
-  | 'name'
-  | 'artist'
-  | 'bpm'
-  | 'level'
-  | 'notes'
-  | 'duration';
+  'default' | 'title' | 'name' | 'artist' | 'bpm' | 'level' | 'notes' | 'duration';
 
 export type SongSortDirection = 'asc' | 'desc';
 
@@ -56,26 +49,21 @@ function isSongSortKey(value: string, allowed: readonly SongSortKey[]): value is
   return (allowed as readonly string[]).includes(value);
 }
 
-function normalizeSettings(
-  raw: unknown,
-  allowedKeys: readonly SongSortKey[],
-): SongSortSettings {
+function normalizeSettings(raw: unknown, allowedKeys: readonly SongSortKey[]): SongSortSettings {
   if (typeof raw === 'string') {
     return LEGACY_MODE_MAP[raw] ?? DEFAULT_SONG_SORT;
   }
   if (!raw || typeof raw !== 'object') return DEFAULT_SONG_SORT;
   const candidate = raw as Partial<SongSortSettings>;
-  const key = typeof candidate.key === 'string' && isSongSortKey(candidate.key, allowedKeys)
-    ? candidate.key
-    : 'default';
+  const key =
+    typeof candidate.key === 'string' && isSongSortKey(candidate.key, allowedKeys)
+      ? candidate.key
+      : 'default';
   const direction = candidate.direction === 'desc' ? 'desc' : 'asc';
   return { key, direction };
 }
 
-function loadSettings(
-  storageKey: string,
-  allowedKeys: readonly SongSortKey[],
-): SongSortSettings {
+function loadSettings(storageKey: string, allowedKeys: readonly SongSortKey[]): SongSortSettings {
   try {
     const stored = localStorage.getItem(storageKey);
     if (!stored) return DEFAULT_SONG_SORT;
@@ -83,14 +71,18 @@ function loadSettings(
       return normalizeSettings(JSON.parse(stored), allowedKeys);
     }
     return normalizeSettings(stored, allowedKeys);
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return DEFAULT_SONG_SORT;
 }
 
 function saveSettings(storageKey: string, settings: SongSortSettings): void {
   try {
     localStorage.setItem(storageKey, JSON.stringify(settings));
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 export function loadFolderSongSort(): SongSortSettings {

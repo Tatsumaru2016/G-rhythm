@@ -1,17 +1,10 @@
-export type MusicGenre =
-  | 'electronic'
-  | 'rock'
-  | 'pop'
-  | 'jazz'
-  | 'classical'
-  | 'hiphop'
-  | 'other';
+export type MusicGenre = 'electronic' | 'rock' | 'pop' | 'jazz' | 'classical' | 'hiphop' | 'other';
 
 export type LaneIndex = 0 | 1 | 2 | 3;
 
 export type NoteType = 'tap' | 'hold';
 
-export type JudgmentType = 'perfect' | 'great' | 'good' | 'bad' | 'miss';
+export type JudgmentType = 'marvelous' | 'perfect' | 'great' | 'good' | 'bad' | 'miss';
 
 export interface JudgmentConfig {
   name: JudgmentType;
@@ -71,6 +64,7 @@ export interface GameStats {
   score: number;
   combo: number;
   maxCombo: number;
+  marvelous: number;
   perfect: number;
   great: number;
   good: number;

@@ -79,7 +79,8 @@ export class RandomPickController {
       if (kicker) kicker.hidden = true;
     }
 
-    overlay.querySelector('#song-ring-center')
+    overlay
+      .querySelector('#song-ring-center')
       ?.classList.remove(
         'is-random-pick-reveal',
         'is-random-pick-locked-panel',
@@ -94,7 +95,8 @@ export class RandomPickController {
 
   async start(): Promise<void> {
     if (this.host.getScreenId() !== 'select') return;
-    if (!this.host.canRandomFolderPlay() || this.host.isSelectHubRingLoading() || this.active) return;
+    if (!this.host.canRandomFolderPlay() || this.host.isSelectHubRingLoading() || this.active)
+      return;
 
     const loader = this.host.getCustomLoader();
     const catalog = loader.getCatalog();
@@ -122,7 +124,12 @@ export class RandomPickController {
       if (!flew) return;
 
       await loadPromise;
-      if (gen !== this.gen || this.host.getScreenId() !== 'select' || this.host.isSelectHubRingLoading()) return;
+      if (
+        gen !== this.gen ||
+        this.host.getScreenId() !== 'select' ||
+        this.host.isSelectHubRingLoading()
+      )
+        return;
 
       const chart = this.host.getSelectedChart();
       if (!chart || chart.notes.length === 0) return;
@@ -141,7 +148,10 @@ export class RandomPickController {
       if (!ready) return;
 
       this.setFx('', 'hidden');
-      this.host.getOverlay().querySelector('#song-ring-center')?.classList.remove('is-random-pick-locked-panel');
+      this.host
+        .getOverlay()
+        .querySelector('#song-ring-center')
+        ?.classList.remove('is-random-pick-locked-panel');
       this.host.requestSkipGameCountdown();
       this.host.startSelectedChart();
       completed = true;
@@ -224,9 +234,12 @@ export class RandomPickController {
   }
 
   private clearListHighlight(): void {
-    this.host.getOverlay().querySelectorAll('.folder-song-item').forEach((item) => {
-      item.classList.remove('is-random-pick-source', 'is-random-scroll-candidate');
-    });
+    this.host
+      .getOverlay()
+      .querySelectorAll('.folder-song-item')
+      .forEach((item) => {
+        item.classList.remove('is-random-pick-source', 'is-random-scroll-candidate');
+      });
   }
 
   private setScrollCandidate(catalogIndex: number): void {
@@ -273,10 +286,8 @@ export class RandomPickController {
   private async animateRoulette(fromIndex: number, toIndex: number, gen: number): Promise<boolean> {
     const loader = this.host.getCustomLoader();
     const catalog = loader.getCatalog();
-    const rows = sortFolderCatalog(
-      catalog,
-      this.host.getFolderSongSort(),
-      (track) => this.host.folderTrackSortMeta(track),
+    const rows = sortFolderCatalog(catalog, this.host.getFolderSongSort(), (track) =>
+      this.host.folderTrackSortMeta(track),
     );
     const catalogIndices = rows.map((row) => row.catalogIndex);
     const steps = buildRandomPickRouletteSteps(catalogIndices, fromIndex, toIndex);
@@ -294,15 +305,17 @@ export class RandomPickController {
           return false;
         }
         this.setScrollCandidate(steps[i]);
-        const delay = i < steps.length - 1
-          ? randomRouletteStepDelay(i, total)
-          : RANDOM_PICK_ROULETTE_STOP_MS;
+        const delay =
+          i < steps.length - 1 ? randomRouletteStepDelay(i, total) : RANDOM_PICK_ROULETTE_STOP_MS;
         await this.sleep(delay);
       }
 
-      this.host.getOverlay().querySelectorAll('.folder-song-item').forEach((item) => {
-        item.classList.remove('is-random-scroll-candidate');
-      });
+      this.host
+        .getOverlay()
+        .querySelectorAll('.folder-song-item')
+        .forEach((item) => {
+          item.classList.remove('is-random-scroll-candidate');
+        });
       this.focusSong(finalIndex);
 
       return gen === this.gen && this.host.getScreenId() === 'select';
@@ -375,25 +388,31 @@ export class RandomPickController {
     }
     flyLayer.appendChild(clone);
 
-    const waitAnim = (anim: Animation) => new Promise<void>((resolve) => {
-      anim.onfinish = () => resolve();
-      anim.oncancel = () => resolve();
-    });
+    const waitAnim = (anim: Animation) =>
+      new Promise<void>((resolve) => {
+        anim.onfinish = () => resolve();
+        anim.oncancel = () => resolve();
+      });
 
-    await waitAnim(clone.animate([
-      {
-        transform: `translate(${fromCx}px, ${fromCy}px) translate(-50%, -50%) scale(1, 1)`,
-        opacity: 1,
-      },
-      {
-        transform: `translate(${panelCx}px, ${panelCy}px) translate(-50%, -50%) scale(1, 1)`,
-        opacity: 1,
-      },
-    ], {
-      duration: RANDOM_PICK_FLY_MS,
-      easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
-      fill: 'forwards',
-    }));
+    await waitAnim(
+      clone.animate(
+        [
+          {
+            transform: `translate(${fromCx}px, ${fromCy}px) translate(-50%, -50%) scale(1, 1)`,
+            opacity: 1,
+          },
+          {
+            transform: `translate(${panelCx}px, ${panelCy}px) translate(-50%, -50%) scale(1, 1)`,
+            opacity: 1,
+          },
+        ],
+        {
+          duration: RANDOM_PICK_FLY_MS,
+          easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+          fill: 'forwards',
+        },
+      ),
+    );
 
     if (gen !== this.gen || this.host.getScreenId() !== 'select') {
       this.removeFlyClone();
@@ -410,22 +429,27 @@ export class RandomPickController {
 
     clone.classList.add('random-pick-fly-clone--landing');
 
-    await waitAnim(clone.animate([
-      {
-        transform: `translate(${endCx}px, ${endCy}px) translate(-50%, -50%) scale(1, 1)`,
-        opacity: 1,
-        filter: 'brightness(1)',
-      },
-      {
-        transform: `translate(${endCx}px, ${endCy}px) translate(-50%, -50%) scale(${endScaleX}, ${endScaleY})`,
-        opacity: 1,
-        filter: 'brightness(1.65)',
-      },
-    ], {
-      duration: RANDOM_PICK_EXPAND_MS,
-      easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
-      fill: 'forwards',
-    }));
+    await waitAnim(
+      clone.animate(
+        [
+          {
+            transform: `translate(${endCx}px, ${endCy}px) translate(-50%, -50%) scale(1, 1)`,
+            opacity: 1,
+            filter: 'brightness(1)',
+          },
+          {
+            transform: `translate(${endCx}px, ${endCy}px) translate(-50%, -50%) scale(${endScaleX}, ${endScaleY})`,
+            opacity: 1,
+            filter: 'brightness(1.65)',
+          },
+        ],
+        {
+          duration: RANDOM_PICK_EXPAND_MS,
+          easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+          fill: 'forwards',
+        },
+      ),
+    );
 
     center.classList.add('is-random-pick-flash');
     void center.offsetWidth;

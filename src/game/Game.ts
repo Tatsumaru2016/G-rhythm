@@ -1,19 +1,28 @@
 import type { ChartData, ActiveNote, GameStats, JudgmentType, LaneIndex } from '../types';
-import { ddrStepMillionPoints, ddrFreezeOkPoints, roundDdrMillionScore, countMaxScoreSteps, applyClearFlags } from '../scoring/ddrScoring';
-import { applyDanceGaugeJudgment, applyDanceGaugeDrop, applyDanceGaugeNg, clampDanceGauge, DANCE_GAUGE_START, getDanceGaugeStressLevel, isDanceGaugeFailed } from './danceGauge';
 import {
-  parseChart,
-  getSongDuration,
-  normalizeChartForPlay,
-  withLeadInPad,
-} from './ChartParser';
+  ddrStepMillionPoints,
+  ddrFreezeOkPoints,
+  roundDdrMillionScore,
+  countMaxScoreSteps,
+  applyClearFlags,
+} from '../scoring/ddrScoring';
+import {
+  applyDanceGaugeJudgment,
+  applyDanceGaugeDrop,
+  applyDanceGaugeNg,
+  clampDanceGauge,
+  DANCE_GAUGE_START,
+  getDanceGaugeStressLevel,
+  isDanceGaugeFailed,
+} from './danceGauge';
+import { parseChart, getSongDuration, normalizeChartForPlay, withLeadInPad } from './ChartParser';
 import { getAccuracyRatio } from '../data/charts';
+import { getNewAccuracyMilestones, type AccuracyTier } from './accuracyMilestone';
 import {
-  getNewAccuracyMilestones,
-  type AccuracyTier,
-} from './accuracyMilestone';
-import {
-  judgeTiming, findHittableNote, getMissedNotes, checkHoldBreaks,
+  judgeTiming,
+  findHittableNote,
+  getMissedNotes,
+  checkHoldBreaks,
   getJudgmentConfig,
 } from './Judgment';
 import { InputManager } from './InputManager';
@@ -166,8 +175,15 @@ export class Game {
 
   private emptyStats(): GameStats {
     return {
-      score: 0, combo: 0, maxCombo: 0,
-      perfect: 0, great: 0, good: 0, bad: 0, miss: 0,
+      score: 0,
+      combo: 0,
+      maxCombo: 0,
+      marvelous: 0,
+      perfect: 0,
+      great: 0,
+      good: 0,
+      bad: 0,
+      miss: 0,
     };
   }
 
@@ -219,21 +235,28 @@ export class Game {
       }
 
       if ((this.phase === 'playing' || this.phase === 'gameover') && this.chart) {
-        const currentTime = this.phase === 'gameover'
-          ? this.gameOverFreezeTime
-          : this.audio.getCurrentTime();
+        const currentTime =
+          this.phase === 'gameover' ? this.gameOverFreezeTime : this.audio.getCurrentTime();
         this.audio.updateAudioReactive(dt);
         this.renderer.update(dt);
         this.particles.update(dt);
         this.renderer.render(
-          this.notes, currentTime, this.chart, this.stats, this.particles,
+          this.notes,
+          currentTime,
+          this.chart,
+          this.stats,
+          this.particles,
           this.audio.getAudioReactive(),
           this.danceGauge,
         );
       } else if (this.phase === 'countdown' && this.chart) {
         this.renderer.update(dt);
         this.renderer.render(
-          [], 0, this.chart, this.stats, this.particles,
+          [],
+          0,
+          this.chart,
+          this.stats,
+          this.particles,
           this.audio.getAudioReactive(),
           this.danceGauge,
         );
@@ -330,7 +353,7 @@ export class Game {
     this.setDanceGauge(applyDanceGaugeJudgment(this.danceGauge, judgment));
 
     this.audio.playHitSound(lane, judgment, getAccuracyRatio(this.stats));
-    if (judgment === 'perfect' || judgment === 'great') {
+    if (judgment === 'marvelous' || judgment === 'perfect' || judgment === 'great') {
       this.audio.playRandomGameplayCheer();
     } else {
       this.audio.playJudgmentVoice(judgment);
@@ -344,6 +367,7 @@ export class Game {
     const cx = this.renderer.getLaneCenterX(lane);
     const cy = this.renderer.getHitLineY();
     const particleCounts: Record<JudgmentType, [number, number]> = {
+      marvelous: [40, 14],
       perfect: [36, 12],
       great: [30, 10],
       good: [28, 10],
@@ -351,11 +375,7 @@ export class Game {
       miss: [14, 5],
     };
     const [full, reduced] = particleCounts[judgment];
-    this.particles.burst(
-      cx, cy, lane,
-      this.renderer.getReducedFlash() ? reduced : full,
-      judgment,
-    );
+    this.particles.burst(cx, cy, lane, this.renderer.getReducedFlash() ? reduced : full, judgment);
   }
 
   private applyFreezeOk(lane: LaneIndex, _note: ActiveNote): void {
@@ -379,11 +399,7 @@ export class Game {
     const cx = this.renderer.getLaneCenterX(lane);
     const cy = this.renderer.getHitLineY();
     const [full, reduced] = [28, 10] as const;
-    this.particles.burst(
-      cx, cy, lane,
-      this.renderer.getReducedFlash() ? reduced : full,
-      'perfect',
-    );
+    this.particles.burst(cx, cy, lane, this.renderer.getReducedFlash() ? reduced : full, 'perfect');
   }
 
   private registerFreezeNg(lane: LaneIndex, note: ActiveNote): void {
@@ -409,11 +425,7 @@ export class Game {
     const cx = this.renderer.getLaneCenterX(lane);
     const cy = this.renderer.getHitLineY();
     const [full, reduced] = [14, 5] as const;
-    this.particles.burst(
-      cx, cy, lane,
-      this.renderer.getReducedFlash() ? reduced : full,
-      'miss',
-    );
+    this.particles.burst(cx, cy, lane, this.renderer.getReducedFlash() ? reduced : full, 'miss');
     this.checkAccuracyMilestones();
   }
 
@@ -441,11 +453,7 @@ export class Game {
     const cx = this.renderer.getLaneCenterX(lane);
     const cy = this.renderer.getHitLineY();
     const [full, reduced] = [14, 5] as const;
-    this.particles.burst(
-      cx, cy, lane,
-      this.renderer.getReducedFlash() ? reduced : full,
-      'miss',
-    );
+    this.particles.burst(cx, cy, lane, this.renderer.getReducedFlash() ? reduced : full, 'miss');
     this.checkAccuracyMilestones();
   }
 

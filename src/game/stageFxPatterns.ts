@@ -1,9 +1,6 @@
 import { pickWeightedPattern } from '../audio/musicGenre';
-import {
-  getPhaseStageFxPatterns,
-  maskPatternWeightsForPhase,
-  type SongPhase,
-} from './scrollPhase';
+import type { MessageKey } from '../i18n/messages';
+import { getPhaseStageFxPatterns, maskPatternWeightsForPhase, type SongPhase } from './scrollPhase';
 
 /** 0=Rings … 8=Starburst（SideStageFX と同期・計9種） */
 export const STAGE_FX_PATTERN_COUNT = 9;
@@ -26,17 +23,29 @@ export type StageFxPatternId = (typeof STAGE_FX_PATTERN_IDS)[number];
 export type SideFxPairing = 'unified' | 'split';
 
 const PHASE_SPLIT_PAIRS: Record<SongPhase, readonly [number, number][]> = {
-  early: [[0, 1], [0, 2], [1, 2]],
-  mid: [[3, 4], [3, 5], [4, 5]],
-  late: [[6, 7], [6, 8], [7, 8]],
+  early: [
+    [0, 1],
+    [0, 2],
+    [1, 2],
+  ],
+  mid: [
+    [3, 4],
+    [3, 5],
+    [4, 5],
+  ],
+  late: [
+    [6, 7],
+    [6, 8],
+    [7, 8],
+  ],
 };
 
 export function isValidStageFxPattern(index: number): boolean {
   return Number.isInteger(index) && index >= 0 && index < STAGE_FX_PATTERN_COUNT;
 }
 
-export function stageFxPatternI18nKey(index: number): string {
-  return `debug.fx.${STAGE_FX_PATTERN_IDS[index]}`;
+export function stageFxPatternI18nKey(index: number): MessageKey {
+  return `debug.fx.${STAGE_FX_PATTERN_IDS[index]}` as MessageKey;
 }
 
 export function getStageFxPatternPhase(pattern: number): SongPhase | null {

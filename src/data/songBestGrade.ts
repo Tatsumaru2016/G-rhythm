@@ -1,9 +1,5 @@
 import type { ChartData } from '../types';
-import {
-  DDR_GRADE_ORDER,
-  type DdrGrade,
-  isDdrGradeHigher,
-} from '../scoring/ddrScoring';
+import { DDR_GRADE_ORDER, type DdrGrade, isDdrGradeHigher } from '../scoring/ddrScoring';
 import { chartSongRecordKey } from './songRecordKey';
 
 const STORAGE_KEY = 'g-rhythm-song-best-grades';

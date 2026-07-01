@@ -1,4 +1,3 @@
-import type { SongPhase } from '../game/scrollPhase';
 import type { JudgmentType, MusicGenre } from '../types';
 import { loadLocale, saveLocale } from '../settings/language';
 import { MESSAGES, type Locale, type MessageKey } from './messages';
@@ -42,7 +41,7 @@ export function onLocaleChange(fn: () => void): () => void {
 
 export function t(key: MessageKey, params?: Record<string, string | number>): string {
   const table = MESSAGES[locale] ?? MESSAGES.ja;
-  let text = table[key] ?? MESSAGES.ja[key] ?? String(key);
+  let text: string = table[key] ?? MESSAGES.ja[key] ?? String(key);
   if (params) {
     for (const [k, v] of Object.entries(params)) {
       text = text.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v));
@@ -53,10 +52,6 @@ export function t(key: MessageKey, params?: Record<string, string | number>): st
 
 export function tGenre(genre: MusicGenre): string {
   return t(`genre.${genre}`);
-}
-
-export function tPhase(phase: SongPhase): string {
-  return t(`phase.${phase}`);
 }
 
 export function tJudgment(judgment: JudgmentType): string {
@@ -70,12 +65,12 @@ export function tFreezeJudgment(judgment: FreezeJudgment): string {
 }
 
 export function tDifficultyHint(difficulty: 'EASY' | 'NORMAL' | 'HARD' | 'EXTREME'): string {
-  const key: MessageKey = {
+  const key = {
     EASY: 'difficulty.easy',
     NORMAL: 'difficulty.normal',
     HARD: 'difficulty.hard',
     EXTREME: 'difficulty.extreme',
-  }[difficulty];
+  }[difficulty] as MessageKey;
   return t(key);
 }
 

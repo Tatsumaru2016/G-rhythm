@@ -7,11 +7,12 @@ export function renderBestGradeBadgeHtml(
   grade: DdrGrade | null | undefined,
   variant: 'card' | 'hero' | 'panel' = 'card',
 ): string {
-  const variantClass = variant === 'hero'
-    ? ' song-best-grade--hero'
-    : variant === 'panel'
-      ? ' song-best-grade--panel'
-      : ' song-best-grade--card';
+  const variantClass =
+    variant === 'hero'
+      ? ' song-best-grade--hero'
+      : variant === 'panel'
+        ? ' song-best-grade--panel'
+        : ' song-best-grade--card';
   const unset = !grade;
   const rankClass = unset ? 'song-best-grade--unset' : ddrGradeCssClass(grade);
   const value = unset ? '--' : grade;

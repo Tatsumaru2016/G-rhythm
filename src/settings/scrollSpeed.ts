@@ -7,7 +7,9 @@ export function loadScrollSpeed(): number {
   try {
     const v = parseFloat(localStorage.getItem(STORAGE_KEY) ?? '');
     if (Number.isFinite(v) && v >= MIN_SCROLL_SPEED && v <= MAX_SCROLL_SPEED) return v;
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return DEFAULT_SCROLL_SPEED;
 }
 
@@ -15,7 +17,9 @@ export function saveScrollSpeed(speed: number): void {
   const clamped = Math.max(MIN_SCROLL_SPEED, Math.min(MAX_SCROLL_SPEED, speed));
   try {
     localStorage.setItem(STORAGE_KEY, String(clamped));
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 export function formatScrollSpeed(speed: number): string {

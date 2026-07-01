@@ -1,8 +1,20 @@
 import type { ActiveNote, JudgmentConfig, JudgmentType } from '../types';
 import { JUDGMENTS } from '../types';
 import { tJudgment } from '../i18n';
+
+/** DDR 系 — Perfect より厳しい最上位判定（ms） */
+export const MARVELOUS_WINDOW_MS = 18;
+
+export const MARVELOUS_JUDGMENT: JudgmentConfig = {
+  name: 'marvelous',
+  windowMs: MARVELOUS_WINDOW_MS,
+  scoreRatio: 1.0,
+  countsCombo: true,
+};
+
 export function judgeTiming(diffMs: number): JudgmentType {
   const abs = Math.abs(diffMs);
+  if (abs <= MARVELOUS_WINDOW_MS) return 'marvelous';
   for (const j of JUDGMENTS) {
     if (abs <= j.windowMs) return j.name;
   }
@@ -10,7 +22,8 @@ export function judgeTiming(diffMs: number): JudgmentType {
 }
 
 export function getJudgmentConfig(type: JudgmentType): JudgmentConfig | null {
-  return JUDGMENTS.find(j => j.name === type) ?? null;
+  if (type === 'marvelous') return MARVELOUS_JUDGMENT;
+  return JUDGMENTS.find((j) => j.name === type) ?? null;
 }
 
 /** 遅れ判定の上限（BAD 枠）— ms */
@@ -26,7 +39,7 @@ export function findHittableNote(
   notes: ActiveNote[],
   lane: number,
   currentTime: number,
-  forRelease = false
+  forRelease = false,
 ): ActiveNote | null {
   let best: ActiveNote | null = null;
   let bestDiff = Infinity;
@@ -73,7 +86,11 @@ export function getMissedNotes(notes: ActiveNote[], currentTime: number): Active
   return missed;
 }
 
-export function checkHoldBreaks(notes: ActiveNote[], currentTime: number, lanePressed: boolean[]): ActiveNote[] {
+export function checkHoldBreaks(
+  notes: ActiveNote[],
+  currentTime: number,
+  lanePressed: boolean[],
+): ActiveNote[] {
   const broken: ActiveNote[] = [];
   const graceSec = lateJudgmentWindowSec();
   for (const note of notes) {
@@ -96,6 +113,7 @@ export function getJudgmentLabel(type: JudgmentType): string {
 }
 
 export const JUDGMENT_COLORS: Record<JudgmentType, string> = {
+  marvelous: '#fff4a8',
   perfect: '#00ffff',
   great: '#7fff00',
   good: '#ffd700',

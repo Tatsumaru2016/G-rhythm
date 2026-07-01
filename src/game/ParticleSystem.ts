@@ -27,27 +27,79 @@ interface BurstTier {
 }
 
 const BURST_TIERS: Partial<Record<JudgmentType, BurstTier>> = {
+  marvelous: {
+    speedMin: 220,
+    speedMax: 340,
+    lifeMin: 0.72,
+    lifeMax: 1.08,
+    sizeMin: 3.5,
+    sizeMax: 8,
+    lift: 105,
+    sparkRing: 18,
+    shockCount: 2,
+    useJudgmentColor: true,
+  },
   perfect: {
-    speedMin: 200, speedMax: 300, lifeMin: 0.65, lifeMax: 1.0,
-    sizeMin: 3, sizeMax: 7, lift: 90, sparkRing: 16, shockCount: 1, useJudgmentColor: false,
+    speedMin: 200,
+    speedMax: 300,
+    lifeMin: 0.65,
+    lifeMax: 1.0,
+    sizeMin: 3,
+    sizeMax: 7,
+    lift: 90,
+    sparkRing: 16,
+    shockCount: 1,
+    useJudgmentColor: false,
   },
   great: {
-    speedMin: 170, speedMax: 260, lifeMin: 0.55, lifeMax: 0.9,
-    sizeMin: 2.5, sizeMax: 6, lift: 70, sparkRing: 14, shockCount: 1, useJudgmentColor: true,
+    speedMin: 170,
+    speedMax: 260,
+    lifeMin: 0.55,
+    lifeMax: 0.9,
+    sizeMin: 2.5,
+    sizeMax: 6,
+    lift: 70,
+    sparkRing: 14,
+    shockCount: 1,
+    useJudgmentColor: true,
   },
   good: {
-    speedMin: 150, speedMax: 240, lifeMin: 0.5, lifeMax: 0.8,
-    sizeMin: 2.5, sizeMax: 5.5, lift: 60, sparkRing: 12, shockCount: 1, useJudgmentColor: true,
+    speedMin: 150,
+    speedMax: 240,
+    lifeMin: 0.5,
+    lifeMax: 0.8,
+    sizeMin: 2.5,
+    sizeMax: 5.5,
+    lift: 60,
+    sparkRing: 12,
+    shockCount: 1,
+    useJudgmentColor: true,
   },
   bad: {
-    speedMin: 130, speedMax: 220, lifeMin: 0.45, lifeMax: 0.75,
-    sizeMin: 2, sizeMax: 5, lift: 50, sparkRing: 10, shockCount: 1, useJudgmentColor: true,
+    speedMin: 130,
+    speedMax: 220,
+    lifeMin: 0.45,
+    lifeMax: 0.75,
+    sizeMin: 2,
+    sizeMax: 5,
+    lift: 50,
+    sparkRing: 10,
+    shockCount: 1,
+    useJudgmentColor: true,
   },
 };
 
 const DEFAULT_TIER: BurstTier = {
-  speedMin: 100, speedMax: 150, lifeMin: 0.35, lifeMax: 0.55,
-  sizeMin: 2, sizeMax: 3, lift: 40, sparkRing: 0, shockCount: 0, useJudgmentColor: true,
+  speedMin: 100,
+  speedMax: 150,
+  lifeMin: 0.35,
+  lifeMax: 0.55,
+  sizeMin: 2,
+  sizeMax: 3,
+  lift: 40,
+  sparkRing: 0,
+  shockCount: 0,
+  useJudgmentColor: true,
 };
 
 export class ParticleSystem {
@@ -62,16 +114,22 @@ export class ParticleSystem {
   constructor(poolSize = 280) {
     for (let i = 0; i < poolSize; i++) {
       this.pool.push({
-        x: 0, y: 0, vx: 0, vy: 0, life: 0, maxLife: 1, color: '#fff', size: 3,
+        x: 0,
+        y: 0,
+        vx: 0,
+        vy: 0,
+        life: 0,
+        maxLife: 1,
+        color: '#fff',
+        size: 3,
       });
     }
   }
 
   burst(x: number, y: number, lane: LaneIndex, count = 24, judgment?: JudgmentType) {
     const tier = (judgment && BURST_TIERS[judgment]) || DEFAULT_TIER;
-    const baseColor = judgment && tier.useJudgmentColor
-      ? JUDGMENT_COLORS[judgment]
-      : LANE_COLORS[lane];
+    const baseColor =
+      judgment && tier.useJudgmentColor ? JUDGMENT_COLORS[judgment] : LANE_COLORS[lane];
     const burstCount = this.reducedFlash ? Math.max(4, Math.floor(count * 0.4)) : count;
 
     for (let i = 0; i < burstCount; i++) {

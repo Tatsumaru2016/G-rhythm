@@ -246,7 +246,7 @@ export class TitleScreenBackground {
   }
 
   private initTunnelNotes(): void {
-    const count = this.lite ? 11 : (this.reducedFlash ? 13 : 21);
+    const count = this.lite ? 11 : this.reducedFlash ? 13 : 21;
     this.tunnelNotes = Array.from({ length: count }, () => {
       const note = new TunnelNote();
       note.respawn(true);
@@ -337,10 +337,14 @@ export class TitleScreenBackground {
     };
 
     const fillQuad = (
-      x0: number, y0: number,
-      x1: number, y1: number,
-      x2: number, y2: number,
-      x3: number, y3: number,
+      x0: number,
+      y0: number,
+      x1: number,
+      y1: number,
+      x2: number,
+      y2: number,
+      x3: number,
+      y3: number,
       color: string,
       depth: number,
     ) => {
@@ -375,10 +379,14 @@ export class TitleScreenBackground {
         const fy0 = floorY(d0);
         const fy1 = floorY(d1);
         fillQuad(
-          flx0 + t0 * (frx0 - flx0), fy0,
-          flx0 + t1 * (frx0 - flx0), fy0,
-          flx1 + t1 * (frx1 - flx1), fy1,
-          flx1 + t0 * (frx1 - flx1), fy1,
+          flx0 + t0 * (frx0 - flx0),
+          fy0,
+          flx0 + t1 * (frx0 - flx0),
+          fy0,
+          flx1 + t1 * (frx1 - flx1),
+          fy1,
+          flx1 + t0 * (frx1 - flx1),
+          fy1,
           WALL_COLORS.floor,
           depthMid,
         );
@@ -386,10 +394,14 @@ export class TitleScreenBackground {
         const cly0 = ceilY(d0);
         const cly1 = ceilY(d1);
         fillQuad(
-          flx0 + t0 * (frx0 - flx0), cly0,
-          flx1 + t0 * (frx1 - flx1), cly1,
-          flx1 + t1 * (frx1 - flx1), cly1,
-          flx0 + t1 * (frx0 - flx0), cly0,
+          flx0 + t0 * (frx0 - flx0),
+          cly0,
+          flx1 + t0 * (frx1 - flx1),
+          cly1,
+          flx1 + t1 * (frx1 - flx1),
+          cly1,
+          flx0 + t1 * (frx0 - flx0),
+          cly0,
           WALL_COLORS.ceiling,
           depthMid,
         );
@@ -400,14 +412,7 @@ export class TitleScreenBackground {
         const lyb1 = ceilY(d1) + t1 * (floorY(d1) - ceilY(d1));
         const lx0 = leftX(d0);
         const lx1 = leftX(d1);
-        fillQuad(
-          lx0, lyt0,
-          lx0, lyt1,
-          lx1, lyb1,
-          lx1, lyb0,
-          WALL_COLORS.left,
-          depthMid,
-        );
+        fillQuad(lx0, lyt0, lx0, lyt1, lx1, lyb1, lx1, lyb0, WALL_COLORS.left, depthMid);
 
         const ryt0 = ceilY(d0) + t0 * (floorY(d0) - ceilY(d0));
         const ryt1 = ceilY(d0) + t1 * (floorY(d0) - ceilY(d0));
@@ -415,14 +420,7 @@ export class TitleScreenBackground {
         const ryb1 = ceilY(d1) + t1 * (floorY(d1) - ceilY(d1));
         const rx0 = rightX(d0);
         const rx1 = rightX(d1);
-        fillQuad(
-          rx0, ryt0,
-          rx1, ryb0,
-          rx1, ryb1,
-          rx0, ryt1,
-          WALL_COLORS.right,
-          depthMid,
-        );
+        fillQuad(rx0, ryt0, rx1, ryb0, rx1, ryb1, rx0, ryt1, WALL_COLORS.right, depthMid);
       }
     }
 

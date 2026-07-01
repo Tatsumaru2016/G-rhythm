@@ -25,12 +25,14 @@ export async function pickCustomAudioFile(): Promise<File | null> {
     const options: OpenFilePickerOptions = {
       id: 'g-rhythm-custom-audio',
       multiple: false,
-      types: [{
-        description: 'Audio',
-        accept: {
-          'audio/*': [...AUDIO_EXTENSIONS],
+      types: [
+        {
+          description: 'Audio',
+          accept: {
+            'audio/*': [...AUDIO_EXTENSIONS],
+          },
         },
-      }],
+      ],
       startIn: lastFile ?? 'music',
     };
 
@@ -43,15 +45,13 @@ export async function pickCustomAudioFile(): Promise<File | null> {
   }
 }
 
-async function collectAudioFilesFromDirectory(
-  handle: FileSystemDirectoryHandle,
-): Promise<File[]> {
+async function collectAudioFilesFromDirectory(handle: FileSystemDirectoryHandle): Promise<File[]> {
   const files: File[] = [];
   for await (const entry of handle.values()) {
     if (entry.kind === 'file' && isAudioFileName(entry.name)) {
       files.push(await (entry as FileSystemFileHandle).getFile());
     } else if (entry.kind === 'directory') {
-      files.push(...await collectAudioFilesFromDirectory(entry as FileSystemDirectoryHandle));
+      files.push(...(await collectAudioFilesFromDirectory(entry as FileSystemDirectoryHandle)));
     }
   }
   return files;
@@ -81,9 +81,9 @@ async function readAudioFilesFromFolderHandle(
 }
 
 /** 保存済みフォルダを読み込む（起動時は requestPermission: false 推奨） */
-export async function restoreLastCustomMusicFolder(
-  options?: { requestPermission?: boolean },
-): Promise<CustomAudioFolderPick | null> {
+export async function restoreLastCustomMusicFolder(options?: {
+  requestPermission?: boolean;
+}): Promise<CustomAudioFolderPick | null> {
   if (!supportsCustomMusicFolderPicker()) return null;
 
   const handle = await loadLastCustomMusicFolderHandle({ requirePermission: false });
@@ -110,7 +110,9 @@ export async function pickCustomAudioFolder(): Promise<CustomAudioFolderPick | n
   let startIn: FileSystemHandle | undefined;
   try {
     startIn = (await loadLastCustomMusicFolderHandle({ requirePermission: false })) ?? undefined;
-  } catch { /* ignore stale handle */ }
+  } catch {
+    /* ignore stale handle */
+  }
 
   let handle: FileSystemDirectoryHandle;
   try {

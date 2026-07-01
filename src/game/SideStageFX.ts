@@ -1,17 +1,8 @@
 import type { ChartData, GameStats, JudgmentType } from '../types';
 import { AUDIO_BAND_COUNT, type AudioReactive } from '../audio/AudioEngine';
-import {
-  blendPhaseWithGenre,
-  getGenreVisualProfile,
-  resolveGenre,
-} from '../audio/musicGenre';
+import { blendPhaseWithGenre, getGenreVisualProfile, resolveGenre } from '../audio/musicGenre';
 import type { MusicGenre } from '../types';
-import {
-  isValidStageFxPattern,
-  pickSidePatterns,
-  STAGE_FX_PATTERN_COUNT,
-  type SideFxPairing,
-} from './stageFxPatterns';
+import { isValidStageFxPattern, pickSidePatterns, type SideFxPairing } from './stageFxPatterns';
 import {
   getPhaseColorScheme,
   PHASE_SIDE_FX_DRIVE,
@@ -44,7 +35,6 @@ export interface LaneBounds {
 }
 
 /** 0=Rings 1=PrismPulse 2=Plasma 3=AuroraFlow 4=Beams 5=Waves 6=NeonCascade 7=Scanlines 8=Starburst */
-const PATTERN_COUNT = STAGE_FX_PATTERN_COUNT;
 const BAND_COUNT = AUDIO_BAND_COUNT;
 
 interface SidePanel {
@@ -151,7 +141,9 @@ export class SideStageFX {
   }
 
   private anyLightHitOverlay(): boolean {
-    return this.usesLightHitOverlay(this.leftPattern) || this.usesLightHitOverlay(this.rightPattern);
+    return (
+      this.usesLightHitOverlay(this.leftPattern) || this.usesLightHitOverlay(this.rightPattern)
+    );
   }
 
   private anyRingHitFx(): boolean {
@@ -168,9 +160,10 @@ export class SideStageFX {
   }
 
   private assignPatterns(phase: SongPhase): void {
-    const base = this.patternWeights.length > 0
-      ? this.patternWeights
-      : getGenreVisualProfile(this.genre).patternWeights;
+    const base =
+      this.patternWeights.length > 0
+        ? this.patternWeights
+        : getGenreVisualProfile(this.genre).patternWeights;
 
     const pick = pickSidePatterns(base, this.debugPattern, phase);
     this.leftPattern = pick.left;
@@ -178,7 +171,11 @@ export class SideStageFX {
     this.pairing = pick.pairing;
   }
 
-  private sidePanels(screenW: number, screenH: number, bounds: LaneBounds): { left: SidePanel; right: SidePanel } {
+  private sidePanels(
+    screenW: number,
+    screenH: number,
+    bounds: LaneBounds,
+  ): { left: SidePanel; right: SidePanel } {
     const laneEnd = bounds.startX + bounds.width;
     return {
       left: { x: 0, y: 0, w: bounds.startX, h: screenH },
@@ -218,6 +215,7 @@ export class SideStageFX {
     bounds?: LaneBounds,
   ) {
     const boosts: Record<JudgmentType, number> = {
+      marvelous: 1.0,
       perfect: 0.85,
       great: 0.42,
       good: 0.34,
@@ -226,6 +224,7 @@ export class SideStageFX {
     };
 
     const perfectAdds: Record<JudgmentType, number> = {
+      marvelous: 1.75,
       perfect: 1.45,
       great: 0.48,
       good: 0.32,
@@ -250,10 +249,16 @@ export class SideStageFX {
         2.8,
         this.perfectBoost + perfectAdds[judgment] + Math.min(0.4, combo * 0.012),
       );
-      this.hue += judgment === 'perfect' ? 52 + combo * 0.5
-        : judgment === 'great' ? 28
-        : judgment === 'good' ? 20
-        : 14;
+      this.hue +=
+        judgment === 'marvelous'
+          ? 68 + combo * 0.55
+          : judgment === 'perfect'
+            ? 52 + combo * 0.5
+            : judgment === 'great'
+              ? 28
+              : judgment === 'good'
+                ? 20
+                : 14;
       this.spawnJudgmentBurst(screenW, screenH, judgment, bounds);
     }
   }
@@ -276,14 +281,16 @@ export class SideStageFX {
     for (const { x: cx, y: cy } of centers) {
       for (let i = 0; i < count; i++) {
         this.bursts.push({
-          x: cx, y: cy,
+          x: cx,
+          y: cy,
           angle: Math.random() * Math.PI * 2,
           life: burstLife,
           hue: hueBase + Math.random() * 80,
         });
         if (this.anyRingHitFx()) {
           this.rings.push({
-            x: cx, y: cy,
+            x: cx,
+            y: cy,
             r: 24 + i * 8,
             life: ringLife,
             hue: hueBase + Math.random() * 90,
@@ -294,7 +301,11 @@ export class SideStageFX {
     }
   }
 
-  private hitCenters(screenW: number, screenH: number, bounds?: LaneBounds): { x: number; y: number }[] {
+  private hitCenters(
+    screenW: number,
+    screenH: number,
+    bounds?: LaneBounds,
+  ): { x: number; y: number }[] {
     const b = bounds ?? this.lastBounds;
     if (!b) {
       return [{ x: screenW * 0.72, y: screenH * 0.5 }];
@@ -306,17 +317,37 @@ export class SideStageFX {
     return [{ x: b.startX + b.width * 0.5, y: screenH * 0.5 }];
   }
 
-  private spawnJudgmentBurst(screenW: number, screenH: number, judgment: JudgmentType, bounds?: LaneBounds) {
+  private spawnJudgmentBurst(
+    screenW: number,
+    screenH: number,
+    judgment: JudgmentType,
+    bounds?: LaneBounds,
+  ) {
     const centers = this.hitCenters(screenW, screenH, bounds);
 
     const ringLife: Record<JudgmentType, number> = {
-      perfect: 1.35, great: 0.95, good: 0.8, bad: 0.65, miss: 0,
+      marvelous: 1.5,
+      perfect: 1.35,
+      great: 0.95,
+      good: 0.8,
+      bad: 0.65,
+      miss: 0,
     };
     const burstLife: Record<JudgmentType, number> = {
-      perfect: 1.2, great: 0.9, good: 0.75, bad: 0.6, miss: 0,
+      marvelous: 1.35,
+      perfect: 1.2,
+      great: 0.9,
+      good: 0.75,
+      bad: 0.6,
+      miss: 0,
     };
     const hueShift: Record<JudgmentType, number> = {
-      perfect: 60, great: 45, good: 30, bad: -15, miss: 0,
+      marvelous: 75,
+      perfect: 60,
+      great: 45,
+      good: 30,
+      bad: -15,
+      miss: 0,
     };
 
     const life = ringLife[judgment];
@@ -326,19 +357,27 @@ export class SideStageFX {
     const lightHit = this.anyLightHitOverlay();
     const ringCount = lightHit
       ? 1
-      : judgment === 'perfect' ? 3 : judgment === 'great' ? 2 : 1;
+      : judgment === 'marvelous'
+        ? 4
+        : judgment === 'perfect'
+          ? 3
+          : judgment === 'great'
+            ? 2
+            : 1;
 
     for (const { x: cx, y: cy } of centers) {
       for (let i = 0; i < ringCount; i++) {
         this.bursts.push({
-          x: cx, y: cy,
+          x: cx,
+          y: cy,
           angle: Math.random() * Math.PI * 2,
           life: burstLife[judgment],
           hue: hueBase + Math.random() * 50,
         });
         if (this.anyRingHitFx()) {
           this.rings.push({
-            x: cx, y: cy,
+            x: cx,
+            y: cy,
             r: 18 + i * 10,
             life,
             hue: hueBase + Math.random() * 70,
@@ -373,7 +412,13 @@ export class SideStageFX {
     return (sync.hue + palette.hueBase + offset) % 360;
   }
 
-  private psyColor(hue: number, sat = 92, light = 58, alpha = 1, palette?: PhaseColorScheme): string {
+  private psyColor(
+    hue: number,
+    sat = 92,
+    light = 58,
+    alpha = 1,
+    palette?: PhaseColorScheme,
+  ): string {
     const s = palette ? palette.saturation : sat;
     return `hsla(${((hue % 360) + 360) % 360}, ${s}%, ${light}%, ${alpha})`;
   }
@@ -382,13 +427,24 @@ export class SideStageFX {
     const a = sync.audio;
     const avg = this.bandLevels.reduce((s, v) => s + v, 0) / BAND_COUNT;
     const beatFlow = Math.sin(sync.beatPhase * Math.PI);
-    const tierDrive = sync.accuracyTier === 95 ? 0.35
-      : sync.accuracyTier === 90 ? 0.22
-      : sync.accuracyTier === 80 ? 0.12
-      : 0;
-    return Math.min(2.2,
-      a.energy * 1.8 + a.bass * 1.1 + a.vocal * 1.2 + a.spike * 1.6
-      + avg * 0.9 + beatFlow * 0.55 + sync.hitBoost * 0.5 + tierDrive,
+    const tierDrive =
+      sync.accuracyTier === 95
+        ? 0.35
+        : sync.accuracyTier === 90
+          ? 0.22
+          : sync.accuracyTier === 80
+            ? 0.12
+            : 0;
+    return Math.min(
+      2.2,
+      a.energy * 1.8 +
+        a.bass * 1.1 +
+        a.vocal * 1.2 +
+        a.spike * 1.6 +
+        avg * 0.9 +
+        beatFlow * 0.55 +
+        sync.hitBoost * 0.5 +
+        tierDrive,
     );
   }
 
@@ -404,7 +460,8 @@ export class SideStageFX {
     const flow = Math.sin(sync.beatPhase * Math.PI);
     for (const { x, y } of this.hitCenters(screenW, screenH, bounds)) {
       this.rings.push({
-        x, y,
+        x,
+        y,
         r: 28 + flow * 10,
         life: 0.75 + flow * 0.35,
         hue: this.hue + beat * 37,
@@ -413,13 +470,7 @@ export class SideStageFX {
     }
   }
 
-  update(
-    dt: number,
-    sync: MusicSync,
-    screenW: number,
-    screenH: number,
-    bounds?: LaneBounds,
-  ) {
+  update(dt: number, sync: MusicSync, screenW: number, screenH: number, bounds?: LaneBounds) {
     this.time += dt;
     this.hitBoost *= Math.max(0, 1 - dt * 3.8);
     this.perfectBoost *= Math.max(0, 1 - dt * 2.2);
@@ -488,7 +539,10 @@ export class SideStageFX {
     if (this.debugPattern === null && phase !== this.lastSongPhase) {
       this.assignPatterns(phase);
       if (this.lastSongPhase !== null && !this.reducedFlash) {
-        this.hitBoost = Math.max(this.hitBoost, phase === 'late' ? 0.72 : phase === 'mid' ? 0.52 : 0.38);
+        this.hitBoost = Math.max(
+          this.hitBoost,
+          phase === 'late' ? 0.72 : phase === 'mid' ? 0.52 : 0.38,
+        );
         this.perfectBoost = Math.min(2.8, this.perfectBoost + (phase === 'late' ? 0.35 : 0.2));
       }
     }
@@ -497,9 +551,10 @@ export class SideStageFX {
     const palette = blendPhaseWithGenre(getPhaseColorScheme(phase), this.genre);
     const drawSync = this.dampenSync(sync);
     const genreVisual = getGenreVisualProfile(this.genre);
-    const bright = this.brightness()
-      * (this.reducedFlash ? 1 : genreVisual.driveScale)
-      * PHASE_SIDE_FX_DRIVE[phase];
+    const bright =
+      this.brightness() *
+      (this.reducedFlash ? 1 : genreVisual.driveScale) *
+      PHASE_SIDE_FX_DRIVE[phase];
     const panels = this.sidePanels(screenW, screenH, bounds);
 
     ctx.save();
@@ -558,15 +613,33 @@ export class SideStageFX {
     bandShift: number,
   ) {
     switch (pattern) {
-      case 0: this.drawRingField(ctx, w, h, sync, palette, cx, cy, bandShift); break;
-      case 1: this.drawPrismPulse(ctx, w, h, sync, palette, cx, cy, bandShift); break;
-      case 2: this.drawPlasma(ctx, w, h, sync, palette, bandShift); break;
-      case 3: this.drawAuroraFlow(ctx, w, h, sync, palette, bandShift); break;
-      case 4: this.drawBeams(ctx, w, h, sync, palette, bandShift); break;
-      case 5: this.drawWaves(ctx, w, h, sync, palette, pattern, bandShift); break;
-      case 6: this.drawNeonCascade(ctx, w, h, sync, palette, bandShift); break;
-      case 7: this.drawScanlines(ctx, w, h, sync, palette, pattern, bandShift); break;
-      case 8: this.drawStarburst(ctx, w, h, sync, palette, cx, cy, bandShift); break;
+      case 0:
+        this.drawRingField(ctx, w, h, sync, palette, cx, cy, bandShift);
+        break;
+      case 1:
+        this.drawPrismPulse(ctx, w, h, sync, palette, cx, cy, bandShift);
+        break;
+      case 2:
+        this.drawPlasma(ctx, w, h, sync, palette, bandShift);
+        break;
+      case 3:
+        this.drawAuroraFlow(ctx, w, h, sync, palette, bandShift);
+        break;
+      case 4:
+        this.drawBeams(ctx, w, h, sync, palette, bandShift);
+        break;
+      case 5:
+        this.drawWaves(ctx, w, h, sync, palette, pattern, bandShift);
+        break;
+      case 6:
+        this.drawNeonCascade(ctx, w, h, sync, palette, bandShift);
+        break;
+      case 7:
+        this.drawScanlines(ctx, w, h, sync, palette, pattern, bandShift);
+        break;
+      case 8:
+        this.drawStarburst(ctx, w, h, sync, palette, cx, cy, bandShift);
+        break;
     }
   }
 
@@ -582,8 +655,20 @@ export class SideStageFX {
     const pulse = (0.2 + sync.musicDrive * 0.26 + sync.perfectBoost * 0.24) * this.fxDrive(sync);
     const maxR = Math.max(w, h) * 0.9;
     const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, maxR);
-    grad.addColorStop(0, this.psyColor(this.phaseHue(sync, palette), palette.saturation, 60, pulse * 0.62, palette));
-    grad.addColorStop(0.4, this.psyColor(this.phaseHue(sync, palette, palette.hueSecondary), palette.saturation, 54, pulse * 0.42, palette));
+    grad.addColorStop(
+      0,
+      this.psyColor(this.phaseHue(sync, palette), palette.saturation, 60, pulse * 0.62, palette),
+    );
+    grad.addColorStop(
+      0.4,
+      this.psyColor(
+        this.phaseHue(sync, palette, palette.hueSecondary),
+        palette.saturation,
+        54,
+        pulse * 0.42,
+        palette,
+      ),
+    );
     grad.addColorStop(1, 'transparent');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, w, h);
@@ -595,10 +680,12 @@ export class SideStageFX {
 
   private drawRingField(
     ctx: CanvasRenderingContext2D,
-    w: number, h: number,
+    w: number,
+    h: number,
     sync: MusicSync,
     palette: PhaseColorScheme,
-    cx: number, cy: number,
+    cx: number,
+    cy: number,
     bandShift = 0,
   ) {
     const maxR = Math.max(w, h) * 0.78;
@@ -607,7 +694,13 @@ export class SideStageFX {
       const level = this.bandValue(i, bandShift);
       const r = 24 + (i / BAND_COUNT) * maxR * (0.45 + level * 0.85);
       const hue = this.phaseHue(sync, palette, i * 28);
-      ctx.strokeStyle = this.psyColor(hue, palette.saturation, 60, (0.22 + level * 0.5) * drive, palette);
+      ctx.strokeStyle = this.psyColor(
+        hue,
+        palette.saturation,
+        60,
+        (0.22 + level * 0.5) * drive,
+        palette,
+      );
       ctx.lineWidth = 2 + level * 4 + sync.perfectBoost * 3.5;
       ctx.shadowColor = this.psyColor(hue, palette.saturation, 68, 0.75, palette);
       ctx.shadowBlur = level > 0.15 ? 12 + sync.musicDrive * 20 + sync.perfectBoost * 18 : 0;
@@ -621,10 +714,12 @@ export class SideStageFX {
   /** 固定プリズム扇形 — 回転なし、半径の伸縮で動き */
   private drawPrismPulse(
     ctx: CanvasRenderingContext2D,
-    w: number, h: number,
+    w: number,
+    h: number,
     sync: MusicSync,
     palette: PhaseColorScheme,
-    cx: number, cy: number,
+    cx: number,
+    cy: number,
     bandShift = 0,
   ) {
     const maxR = Math.max(w, h) * 0.95;
@@ -645,7 +740,13 @@ export class SideStageFX {
       const a0 = segAngle * s + segAngle * 0.06;
       const a1 = segAngle * (s + 1) - segAngle * 0.06;
 
-      ctx.fillStyle = this.psyColor(hue, palette.saturation, 60, (0.18 + level * 0.42) * drive, palette);
+      ctx.fillStyle = this.psyColor(
+        hue,
+        palette.saturation,
+        60,
+        (0.18 + level * 0.42) * drive,
+        palette,
+      );
       ctx.shadowColor = this.psyColor(hue + 40, palette.saturation, 68, 0.55, palette);
       ctx.shadowBlur = level > 0.15 ? 10 + sync.perfectBoost * 14 : 0;
       ctx.beginPath();
@@ -661,7 +762,8 @@ export class SideStageFX {
 
   private drawPlasma(
     ctx: CanvasRenderingContext2D,
-    w: number, h: number,
+    w: number,
+    h: number,
     sync: MusicSync,
     palette: PhaseColorScheme,
     _bandShift = 0,
@@ -678,13 +780,20 @@ export class SideStageFX {
       for (let c = 0; c < cols; c++) {
         const cx = (c + 0.5) * cellW;
         const cy = (r + 0.5) * cellH;
-        const n = Math.sin(cx * 0.01 * warp + this.time * 2.1)
-          + Math.cos(cy * 0.012 * warp - this.time * 1.7);
-        const level = (n + 2) / 4 * (0.45 + drive * 0.75);
+        const n =
+          Math.sin(cx * 0.01 * warp + this.time * 2.1) +
+          Math.cos(cy * 0.012 * warp - this.time * 1.7);
+        const level = ((n + 2) / 4) * (0.45 + drive * 0.75);
         const hue = this.phaseHue(sync, palette, c * 24 + r * 20 + n * 35);
         const radius = Math.min(cellW, cellH) * (0.38 + level * 1.0);
 
-        ctx.fillStyle = this.psyColor(hue, palette.saturation, 56, (0.14 + level * 0.34) * fx, palette);
+        ctx.fillStyle = this.psyColor(
+          hue,
+          palette.saturation,
+          56,
+          (0.14 + level * 0.34) * fx,
+          palette,
+        );
         ctx.shadowColor = this.psyColor(hue, palette.saturation, 68, 0.45, palette);
         ctx.shadowBlur = level > 0.25 ? 8 + sync.perfectBoost * 10 : 0;
         ctx.beginPath();
@@ -698,7 +807,8 @@ export class SideStageFX {
   /** オーロラ状の横ストリーム — 縦スクロール、中心白飛びなし */
   private drawAuroraFlow(
     ctx: CanvasRenderingContext2D,
-    w: number, h: number,
+    w: number,
+    h: number,
     sync: MusicSync,
     palette: PhaseColorScheme,
     bandShift = 0,
@@ -717,8 +827,20 @@ export class SideStageFX {
 
       const grad = ctx.createLinearGradient(0, scrollY, 0, scrollY + stripH);
       grad.addColorStop(0, 'transparent');
-      grad.addColorStop(0.35, this.psyColor(hue, palette.saturation, 56, (0.08 + level * 0.15) * fx, palette));
-      grad.addColorStop(0.65, this.psyColor(hue + palette.hueSecondary * 0.15, palette.saturation, 58, (0.1 + level * 0.18) * fx, palette));
+      grad.addColorStop(
+        0.35,
+        this.psyColor(hue, palette.saturation, 56, (0.08 + level * 0.15) * fx, palette),
+      );
+      grad.addColorStop(
+        0.65,
+        this.psyColor(
+          hue + palette.hueSecondary * 0.15,
+          palette.saturation,
+          58,
+          (0.1 + level * 0.18) * fx,
+          palette,
+        ),
+      );
       grad.addColorStop(1, 'transparent');
       ctx.fillStyle = grad;
       ctx.save();
@@ -727,12 +849,18 @@ export class SideStageFX {
       ctx.restore();
 
       if (level > 0.2) {
-        ctx.strokeStyle = this.psyColor(hue + 40, palette.saturation, 62, (0.06 + level * 0.1) * fx, palette);
+        ctx.strokeStyle = this.psyColor(
+          hue + 40,
+          palette.saturation,
+          62,
+          (0.06 + level * 0.1) * fx,
+          palette,
+        );
         ctx.lineWidth = 1.5 + level * 2;
         ctx.beginPath();
         for (let x = 0; x <= w; x += 8) {
-          const wy = scrollY + stripH * 0.35
-            + Math.sin(x * 0.012 + this.time * 2 + s) * (8 + level * 14);
+          const wy =
+            scrollY + stripH * 0.35 + Math.sin(x * 0.012 + this.time * 2 + s) * (8 + level * 14);
           if (x === 0) ctx.moveTo(x, wy);
           else ctx.lineTo(x, wy);
         }
@@ -743,7 +871,8 @@ export class SideStageFX {
 
   private drawBeams(
     ctx: CanvasRenderingContext2D,
-    w: number, h: number,
+    w: number,
+    h: number,
     sync: MusicSync,
     palette: PhaseColorScheme,
     bandShift = 0,
@@ -760,8 +889,14 @@ export class SideStageFX {
       const phase = Math.sin(this.time * 4 + i * 0.7) * thick * 0.28;
       const grad = ctx.createLinearGradient(0, y, w, y);
       grad.addColorStop(0, this.psyColor(hue, palette.saturation, 58, 0, palette));
-      grad.addColorStop(0.35, this.psyColor(hue + 30, palette.saturation, 62, (0.32 + level * 0.42) * fx, palette));
-      grad.addColorStop(0.65, this.psyColor(hue + 60, palette.saturation, 64, (0.32 + level * 0.42) * fx, palette));
+      grad.addColorStop(
+        0.35,
+        this.psyColor(hue + 30, palette.saturation, 62, (0.32 + level * 0.42) * fx, palette),
+      );
+      grad.addColorStop(
+        0.65,
+        this.psyColor(hue + 60, palette.saturation, 64, (0.32 + level * 0.42) * fx, palette),
+      );
       grad.addColorStop(1, this.psyColor(hue + 90, palette.saturation, 58, 0, palette));
       const beamAlpha = (0.32 + level * 0.45 + sync.perfectBoost * 0.25) * fx;
       ctx.fillStyle = grad;
@@ -773,7 +908,8 @@ export class SideStageFX {
 
   private drawWaves(
     ctx: CanvasRenderingContext2D,
-    w: number, h: number,
+    w: number,
+    h: number,
     sync: MusicSync,
     palette: PhaseColorScheme,
     pattern: number,
@@ -814,7 +950,8 @@ export class SideStageFX {
   /** 縦ネオンの光の滝 — サイドマージン向け（イコライザー代替） */
   private drawNeonCascade(
     ctx: CanvasRenderingContext2D,
-    w: number, h: number,
+    w: number,
+    h: number,
     sync: MusicSync,
     palette: PhaseColorScheme,
     bandShift = 0,
@@ -837,10 +974,22 @@ export class SideStageFX {
       const wobble = Math.sin(this.time * 3.5 + c * 1.3) * colW * 0.06;
 
       const grad = ctx.createLinearGradient(cx, y, cx, h);
-      grad.addColorStop(0, this.psyColor(hue + 40, palette.saturation, 78, (0.45 + level * 0.35) * fx, palette));
-      grad.addColorStop(0.35, this.psyColor(hue + 15, palette.saturation, 66, (0.28 + level * 0.38) * fx, palette));
-      grad.addColorStop(0.75, this.psyColor(hue, palette.saturation, 58, (0.14 + level * 0.28) * fx, palette));
-      grad.addColorStop(1, this.psyColor(hue - 25, palette.saturation, 48, (0.04 + level * 0.12) * fx, palette));
+      grad.addColorStop(
+        0,
+        this.psyColor(hue + 40, palette.saturation, 78, (0.45 + level * 0.35) * fx, palette),
+      );
+      grad.addColorStop(
+        0.35,
+        this.psyColor(hue + 15, palette.saturation, 66, (0.28 + level * 0.38) * fx, palette),
+      );
+      grad.addColorStop(
+        0.75,
+        this.psyColor(hue, palette.saturation, 58, (0.14 + level * 0.28) * fx, palette),
+      );
+      grad.addColorStop(
+        1,
+        this.psyColor(hue - 25, palette.saturation, 48, (0.04 + level * 0.12) * fx, palette),
+      );
       ctx.fillStyle = grad;
       ctx.shadowColor = this.psyColor(hue + 50, palette.saturation, 72, 0.7, palette);
       ctx.shadowBlur = 8 + level * 16 + boost * 8;
@@ -849,7 +998,10 @@ export class SideStageFX {
       if (level > 0.2) {
         const coreW = pillarW * 0.35;
         const coreGrad = ctx.createLinearGradient(cx, y, cx, h);
-        coreGrad.addColorStop(0, this.psyColor(hue + 70, palette.saturation, 82, (0.35 + level * 0.3) * fx, palette));
+        coreGrad.addColorStop(
+          0,
+          this.psyColor(hue + 70, palette.saturation, 82, (0.35 + level * 0.3) * fx, palette),
+        );
         coreGrad.addColorStop(1, 'transparent');
         ctx.fillStyle = coreGrad;
         ctx.fillRect(cx - coreW * 0.5 + wobble, y, coreW, pillarH * 0.85);
@@ -860,7 +1012,13 @@ export class SideStageFX {
         const phase = (this.time * (1.8 + c * 0.2) + d * 1.7) % 1;
         const dy = h - phase * h * (0.55 + level * 0.35);
         const dropR = 2 + level * 4;
-        ctx.fillStyle = this.psyColor(hue + 55, palette.saturation, 76, (0.25 + level * 0.35) * (1 - phase) * fx, palette);
+        ctx.fillStyle = this.psyColor(
+          hue + 55,
+          palette.saturation,
+          76,
+          (0.25 + level * 0.35) * (1 - phase) * fx,
+          palette,
+        );
         ctx.beginPath();
         ctx.arc(cx + wobble + Math.sin(phase * 6) * 4, dy, dropR, 0, Math.PI * 2);
         ctx.fill();
@@ -878,7 +1036,10 @@ export class SideStageFX {
       const rippleH = 18 + level * 28;
       const grad = ctx.createLinearGradient(0, rippleY, 0, rippleY + rippleH);
       grad.addColorStop(0, 'transparent');
-      grad.addColorStop(0.5, this.psyColor(hue, palette.saturation, 64, 0.35 + level * 0.4, palette));
+      grad.addColorStop(
+        0.5,
+        this.psyColor(hue, palette.saturation, 64, 0.35 + level * 0.4, palette),
+      );
       grad.addColorStop(1, 'transparent');
       ctx.fillStyle = grad;
       ctx.fillRect(cx - colW * 0.45, rippleY, colW * 0.9, rippleH);
@@ -888,7 +1049,8 @@ export class SideStageFX {
 
   private drawScanlines(
     ctx: CanvasRenderingContext2D,
-    w: number, h: number,
+    w: number,
+    h: number,
     sync: MusicSync,
     palette: PhaseColorScheme,
     pattern: number,
@@ -923,8 +1085,14 @@ export class SideStageFX {
       const offset = ((this.time * 90 + d * 80) % (w + h)) - h;
       const grad = ctx.createLinearGradient(0, 0, w, h);
       grad.addColorStop(0, 'transparent');
-      grad.addColorStop(0.45, this.psyColor(hue, palette.saturation, 66, (0.1 + level * 0.24) * drive, palette));
-      grad.addColorStop(0.55, this.psyColor(hue + 60, palette.saturation, 70, (0.14 + level * 0.28) * drive, palette));
+      grad.addColorStop(
+        0.45,
+        this.psyColor(hue, palette.saturation, 66, (0.1 + level * 0.24) * drive, palette),
+      );
+      grad.addColorStop(
+        0.55,
+        this.psyColor(hue + 60, palette.saturation, 70, (0.14 + level * 0.28) * drive, palette),
+      );
       grad.addColorStop(1, 'transparent');
       ctx.strokeStyle = grad;
       ctx.lineWidth = 12 + level * 14;
@@ -941,7 +1109,10 @@ export class SideStageFX {
       const hue = this.phaseHue(sync, palette, b * 55 + this.time * 12);
       const bandGrad = ctx.createLinearGradient(0, bandY - 18, 0, bandY + 18);
       bandGrad.addColorStop(0, 'transparent');
-      bandGrad.addColorStop(0.5, this.psyColor(hue, palette.saturation, 66, (0.12 + level * 0.2) * drive, palette));
+      bandGrad.addColorStop(
+        0.5,
+        this.psyColor(hue, palette.saturation, 66, (0.12 + level * 0.2) * drive, palette),
+      );
       bandGrad.addColorStop(1, 'transparent');
       ctx.fillStyle = bandGrad;
       ctx.fillRect(0, bandY - 20, w, 40);
@@ -955,7 +1126,8 @@ export class SideStageFX {
       0.5,
       this.psyColor(
         this.phaseHue(sync, palette, palette.hueAccent + this.time * 50),
-        palette.saturation, 74,
+        palette.saturation,
+        74,
         (0.24 + sync.perfectBoost * 0.14) * drive,
         palette,
       ),
@@ -967,10 +1139,12 @@ export class SideStageFX {
 
   private drawStarburst(
     ctx: CanvasRenderingContext2D,
-    w: number, h: number,
+    w: number,
+    h: number,
     sync: MusicSync,
     palette: PhaseColorScheme,
-    cx: number, cy: number,
+    cx: number,
+    cy: number,
     bandShift = 0,
   ) {
     const rays = 20;
@@ -988,7 +1162,16 @@ export class SideStageFX {
       const len = maxLen * (0.5 + level * 0.55) * pulse;
       const hue = this.phaseHue(sync, palette, i * 22);
       const grad = ctx.createLinearGradient(0, 0, Math.cos(ang) * len, Math.sin(ang) * len);
-      grad.addColorStop(0, this.psyColor(hue, palette.saturation, 66, (0.32 + level * 0.45 + sync.perfectBoost * 0.18) * fx, palette));
+      grad.addColorStop(
+        0,
+        this.psyColor(
+          hue,
+          palette.saturation,
+          66,
+          (0.32 + level * 0.45 + sync.perfectBoost * 0.18) * fx,
+          palette,
+        ),
+      );
       grad.addColorStop(1, 'transparent');
       ctx.strokeStyle = grad;
       ctx.lineWidth = 2.5 + level * 5 + sync.perfectBoost * 4;
@@ -1005,8 +1188,20 @@ export class SideStageFX {
     // 中心コアグロー
     const coreR = Math.min(w, h) * (0.12 + sync.musicDrive * 0.08 + sync.perfectBoost * 0.06);
     const coreGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR);
-    coreGrad.addColorStop(0, this.psyColor(this.phaseHue(sync, palette, this.time * 60), palette.saturation, 78, 0.55 * fx, palette));
-    coreGrad.addColorStop(0.45, this.psyColor(this.phaseHue(sync, palette, 80), palette.saturation, 70, 0.22 * fx, palette));
+    coreGrad.addColorStop(
+      0,
+      this.psyColor(
+        this.phaseHue(sync, palette, this.time * 60),
+        palette.saturation,
+        78,
+        0.55 * fx,
+        palette,
+      ),
+    );
+    coreGrad.addColorStop(
+      0.45,
+      this.psyColor(this.phaseHue(sync, palette, 80), palette.saturation, 70, 0.22 * fx, palette),
+    );
     coreGrad.addColorStop(1, 'transparent');
     ctx.fillStyle = coreGrad;
     ctx.beginPath();
@@ -1043,7 +1238,13 @@ export class SideStageFX {
       if (lx < -ring.r - 8 || lx > panel.w + ring.r + 8) continue;
       if (ly < -ring.r - 8 || ly > panel.h + ring.r + 8) continue;
       const alpha = ring.life * (0.65 + sync.perfectBoost * 0.3);
-      ctx.strokeStyle = this.psyColor(ring.hue + palette.hueBase * 0.1, palette.saturation, 64, alpha, palette);
+      ctx.strokeStyle = this.psyColor(
+        ring.hue + palette.hueBase * 0.1,
+        palette.saturation,
+        64,
+        alpha,
+        palette,
+      );
       ctx.lineWidth = 3 + sync.musicDrive * 6 + sync.perfectBoost * 10;
       ctx.shadowColor = this.psyColor(ring.hue, palette.saturation, 68, 0.95, palette);
       ctx.shadowBlur = 18 + sync.perfectBoost * 42 + sync.musicDrive * 22;
@@ -1056,10 +1257,12 @@ export class SideStageFX {
 
   private drawHitBursts(
     ctx: CanvasRenderingContext2D,
-    w: number, h: number,
+    w: number,
+    h: number,
     sync: MusicSync,
     palette: PhaseColorScheme,
-    cx: number, cy: number,
+    cx: number,
+    cy: number,
     pattern: number,
     panel: SidePanel,
   ) {
@@ -1072,9 +1275,20 @@ export class SideStageFX {
       const ly = b.y - panel.y;
       if (lx < -80 || lx > panel.w + 80 || ly < -80 || ly > panel.h + 80) continue;
       const arms = light ? 4 : sync.perfectBoost > 0.5 ? 10 : 6;
-      const len = (light ? 36 : 50) + sync.perfectBoost * (light ? 70 : 160) + sync.hitBoost * (light ? 40 : 80) * fx;
-      ctx.strokeStyle = this.psyColor(b.hue + palette.hueAccent * 0.15, palette.saturation, 72, b.life * burstAlpha, palette);
-      ctx.lineWidth = light ? 2 + sync.hitBoost * 1.5 : 2.5 + sync.perfectBoost * 6 + sync.hitBoost * 2.5;
+      const len =
+        (light ? 36 : 50) +
+        sync.perfectBoost * (light ? 70 : 160) +
+        sync.hitBoost * (light ? 40 : 80) * fx;
+      ctx.strokeStyle = this.psyColor(
+        b.hue + palette.hueAccent * 0.15,
+        palette.saturation,
+        72,
+        b.life * burstAlpha,
+        palette,
+      );
+      ctx.lineWidth = light
+        ? 2 + sync.hitBoost * 1.5
+        : 2.5 + sync.perfectBoost * 6 + sync.hitBoost * 2.5;
       if (!light) {
         ctx.shadowColor = this.psyColor(b.hue + 60, palette.saturation, 78, 0.9, palette);
         ctx.shadowBlur = 16 + sync.perfectBoost * 36 + sync.hitBoost * 22;
@@ -1124,8 +1338,8 @@ export class SideStageFX {
   static computeAccuracyTier(stats: GameStats): 0 | 80 | 90 | 95 {
     const acc = SideStageFX.computeAccuracy(stats);
     if (acc >= 0.95) return 95;
-    if (acc >= 0.90) return 90;
-    if (acc >= 0.80) return 80;
+    if (acc >= 0.9) return 90;
+    if (acc >= 0.8) return 80;
     return 0;
   }
 
@@ -1160,9 +1374,16 @@ export class SideStageFX {
     const a = audio;
     const beatFlow = Math.sin(beatPhase * Math.PI);
     const avg = audio.bands.reduce((s, v) => s + v, 0) / Math.max(1, audio.bands.length);
-    base.musicDrive = Math.min(2.2,
-      a.energy * 1.8 + a.bass * 1.1 + a.vocal * 1.2 + a.spike * 1.6
-      + avg * 0.9 + beatFlow * 0.55 + hitBoost * 0.5 + perfectBoost * 0.4,
+    base.musicDrive = Math.min(
+      2.2,
+      a.energy * 1.8 +
+        a.bass * 1.1 +
+        a.vocal * 1.2 +
+        a.spike * 1.6 +
+        avg * 0.9 +
+        beatFlow * 0.55 +
+        hitBoost * 0.5 +
+        perfectBoost * 0.4,
     );
     return base;
   }

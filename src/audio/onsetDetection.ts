@@ -3,11 +3,7 @@ export interface AudioOnset {
   energy: number;
 }
 
-export function detectOnsets(
-  buffer: AudioBuffer,
-  minGap: number,
-  fluxScale = 1,
-): AudioOnset[] {
+export function detectOnsets(buffer: AudioBuffer, minGap: number, fluxScale = 1): AudioOnset[] {
   const data = buffer.getChannelData(0);
   const sampleRate = buffer.sampleRate;
   const windowSize = Math.floor(sampleRate * 0.023);

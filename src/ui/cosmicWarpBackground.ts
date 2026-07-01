@@ -52,7 +52,7 @@ function mixHex(a: string, b: string, t: number): string {
 }
 
 function lerpHue(a: number, b: number, t: number): number {
-  let delta = ((b - a + 540) % 360) - 180;
+  const delta = ((b - a + 540) % 360) - 180;
   return a + delta * t;
 }
 
@@ -151,7 +151,14 @@ export class CosmicWarpBackground {
 
       const cornerX = rect.x === 0 ? halfW : w;
       const cornerY = rect.y === 0 ? halfH : h;
-      const glow = ctx.createRadialGradient(cx, cy, 0, cornerX, cornerY, Math.max(halfW, halfH) * 1.05);
+      const glow = ctx.createRadialGradient(
+        cx,
+        cy,
+        0,
+        cornerX,
+        cornerY,
+        Math.max(halfW, halfH) * 1.05,
+      );
       glow.addColorStop(0, `hsla(${theme.hue + Math.sin(t * 0.9) * 18}, 98%, 62%, 0.55)`);
       glow.addColorStop(0.45, `hsla(${theme.hue}, 92%, 52%, 0.22)`);
       glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
@@ -225,7 +232,8 @@ export class CosmicWarpBackground {
       const hue = (i * 18 + this.time * 35) % 360;
       const len = maxSpan * 1.15;
       const g = ctx.createLinearGradient(
-        cx, cy,
+        cx,
+        cy,
         cx + Math.cos(angle) * len,
         cy + Math.sin(angle) * len,
       );
@@ -332,7 +340,12 @@ export class CosmicWarpBackground {
       const screenY = cy + (p.y / p.z) * fov;
       const radius = (p.size * fov) / p.z;
 
-      if (screenX < -50 || screenX > this.width + 50 || screenY < -50 || screenY > this.height + 50) {
+      if (
+        screenX < -50 ||
+        screenX > this.width + 50 ||
+        screenY < -50 ||
+        screenY > this.height + 50
+      ) {
         continue;
       }
 

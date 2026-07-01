@@ -10,33 +10,33 @@ export function normalizeChartForPlay(chart: ChartData): ChartData {
   if (chart.difficulty.toUpperCase() === 'EXTREME') return chart;
   return {
     ...chart,
-    notes: chart.notes.map((note) => (
-      note.type === 'hold'
-        ? { lane: note.lane, beat: note.beat, type: 'tap' as const }
-        : note
-    )),
+    notes: chart.notes.map((note) =>
+      note.type === 'hold' ? { lane: note.lane, beat: note.beat, type: 'tap' as const } : note,
+    ),
   };
 }
 
 export function parseChart(chart: ChartData): ActiveNote[] {
   const beatUnit = chart.lpb;
-  return chart.notes.map((note, i) => {
-    const time = beatToTime(note.beat / beatUnit, chart);
-    const active: ActiveNote = {
-      id: i,
-      lane: note.lane,
-      time,
-      type: note.type,
-      hit: false,
-      holding: false,
-      missed: false,
-      released: false,
-    };
-    if (note.type === 'hold' && note.duration) {
-      active.endTime = beatToTime((note.beat + note.duration) / beatUnit, chart);
-    }
-    return active;
-  }).sort((a, b) => a.time - b.time);
+  return chart.notes
+    .map((note, i) => {
+      const time = beatToTime(note.beat / beatUnit, chart);
+      const active: ActiveNote = {
+        id: i,
+        lane: note.lane,
+        time,
+        type: note.type,
+        hit: false,
+        holding: false,
+        missed: false,
+        released: false,
+      };
+      if (note.type === 'hold' && note.duration) {
+        active.endTime = beatToTime((note.beat + note.duration) / beatUnit, chart);
+      }
+      return active;
+    })
+    .sort((a, b) => a.time - b.time);
 }
 
 /** 最初のノーツが画面上端から流れ始めるよう offset を補正 */
@@ -52,9 +52,10 @@ export function getSongDuration(chart: ChartData): number {
   let maxTime = chart.offset + 4;
   for (const note of chart.notes) {
     const start = beatToTime(note.beat / chart.lpb, chart);
-    const end = note.type === 'hold' && note.duration
-      ? beatToTime((note.beat + note.duration) / chart.lpb, chart)
-      : start;
+    const end =
+      note.type === 'hold' && note.duration
+        ? beatToTime((note.beat + note.duration) / chart.lpb, chart)
+        : start;
     maxTime = Math.max(maxTime, end);
   }
   const noteEnd = maxTime + 3;

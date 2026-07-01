@@ -22,7 +22,14 @@ async function main() {
   const customLoader = new CustomSongLoader(audio);
   const builtinAudio = new BuiltinSongAudio();
 
-  let game: Game;
+  const init = { game: null as Game | null };
+
+  const endGameplay = () => {
+    init.game!.stop();
+    ui.clearTouchZones();
+    ui.hidePlayHud();
+  };
+
   let touchZones: HTMLElement[] = [];
 
   const prepareChartAudio = (chart: ChartData): ChartData => {
@@ -35,12 +42,6 @@ async function main() {
     return builtinAudio.withAudioDuration(chart);
   };
 
-  const endGameplay = () => {
-    game.stop();
-    ui.clearTouchZones();
-    ui.hidePlayHud();
-  };
-
   const ui = new UIManager(
     overlay,
     touchLayer,
@@ -49,14 +50,14 @@ async function main() {
       ui.prepareForGameplay();
       await audio.resume();
       const playChart = prepareChartAudio(chart);
-      game.setScrollSpeed(ui.getScrollSpeed());
-      game.setReducedFlash(ui.getReducedFlash());
-      game.setDebugStageFxPattern(ui.getDebugStageFxPatternOverride());
+      init.game!.setScrollSpeed(ui.getScrollSpeed());
+      init.game!.setReducedFlash(ui.getReducedFlash());
+      init.game!.setDebugStageFxPattern(ui.getDebugStageFxPatternOverride());
       ui.showCountdownOverlay(playChart);
-      touchZones = ui.showTouchZones(() => game.getTouchZoneLayout());
+      touchZones = ui.showTouchZones(() => init.game!.getTouchZoneLayout());
       ui.showPlayHud();
-      game.bindTouchZones(touchZones);
-      game.start(playChart, {
+      init.game!.bindTouchZones(touchZones);
+      init.game!.start(playChart, {
         countdownSeconds: ui.consumeSkipGameCountdown() ? 0 : undefined,
       });
     },
@@ -74,7 +75,7 @@ async function main() {
     audio,
   );
 
-  game = new Game(canvas, audio, {
+  init.game = new Game(canvas, audio, {
     onCountdown: (num) => ui.updateCountdown(num),
     onPlayStart: () => ui.hideOverlay(),
     onFinish: (stats: GameStats, chart: ChartData) => {
@@ -90,14 +91,18 @@ async function main() {
   void (async () => {
     const pickUrls = randomPickSoundUrls(import.meta.env.BASE_URL);
     const pickSoundsLoad = audio.loadRandomPickSounds(pickUrls);
-    const songFinishCheerLoad = audio.loadSongFinishCheer(songFinishCheerUrl(import.meta.env.BASE_URL));
+    const songFinishCheerLoad = audio.loadSongFinishCheer(
+      songFinishCheerUrl(import.meta.env.BASE_URL),
+    );
     try {
       await Promise.all([pickSoundsLoad, songFinishCheerLoad]);
       await Promise.all([
         builtinAudio.preloadAll(audio),
         audio.loadTitleBgm(`${import.meta.env.BASE_URL}audio/title_bgm.ogg`),
         audio.loadStartSound(`${import.meta.env.BASE_URL}audio/start.wav`),
-        audio.loadCountdownSound(`${import.meta.env.BASE_URL}audio/countdown_tick.wav?v=countdown06-3`),
+        audio.loadCountdownSound(
+          `${import.meta.env.BASE_URL}audio/countdown_tick.wav?v=countdown06-3`,
+        ),
         audio.loadResultAnnounce(resultAnnounceUrl(import.meta.env.BASE_URL)),
         audio.loadResultVoices((id) => resultVoiceUrl(id, import.meta.env.BASE_URL)),
         audio.loadGameplayCheers(allGameplayCheerUrls(import.meta.env.BASE_URL)),
@@ -110,7 +115,7 @@ async function main() {
   })();
 
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden && game.getPhase() === 'playing') {
+    if (document.hidden && init.game?.getPhase() === 'playing') {
       endGameplay();
       ui.showSelect();
     }

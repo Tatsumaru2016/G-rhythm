@@ -77,7 +77,8 @@ export class CustomSongLoader {
 
   setSelectedIndex(index: number): void {
     if (!this.catalog.length) return;
-    this.selectedIndex = ((index % this.catalog.length) + this.catalog.length) % this.catalog.length;
+    this.selectedIndex =
+      ((index % this.catalog.length) + this.catalog.length) % this.catalog.length;
   }
 
   getFolderLabel(): string {
@@ -198,7 +199,6 @@ export class CustomSongLoader {
   }
 
   private async decodeFile(file: File): Promise<CustomSongMeta> {
-    const cacheKey = this.trackCacheKey(file);
     this.currentFile = file;
     const buffer = await this.ensureTrackDecoded(file);
     const analysis = await this.ensureTrackAnalysis(file);
@@ -222,14 +222,7 @@ export class CustomSongLoader {
 
   buildChart(bpm: number, offset: number, difficulty: CustomDifficulty): ChartData {
     if (!this.buffer) throw new Error('No audio loaded');
-    const chart = generateChart(
-      this.buffer,
-      this.fileName,
-      bpm,
-      offset,
-      difficulty,
-      this.genre,
-    );
+    const chart = generateChart(this.buffer, this.fileName, bpm, offset, difficulty, this.genre);
     chart.genreConfidence = this.genreConfidence;
     const recordKey = this.getActiveRecordKey();
     if (recordKey) chart.songRecordKey = recordKey;

@@ -1,0 +1,87 @@
+.hub-toggle__state {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.85rem;
+  height: 1.4rem;
+  padding: 0 0.45rem;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 229, 255, 0.35);
+  background: rgba(2, 12, 32, 0.9);
+  pointer-events: none;
+  flex-shrink: 0;
+}
+
+.hub-toggle__icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.18rem;
+  line-height: 1;
+}
+
+.hub-toggle__glyph {
+  font-size: 0.78rem;
+  line-height: 1;
+  transform: translateY(-0.02em);
+}
+
+.hub-toggle__label {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.48rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.hub-toggle__icon--on {
+  display: inline-flex;
+  color: #00e5ff;
+  text-shadow: 0 0 10px rgba(0, 229, 255, 0.45);
+}
+
+.hub-toggle__icon--on .hub-toggle__glyph {
+  color: #7df3ff;
+}
+
+.hub-toggle__icon--off {
+  display: none;
+  color: rgba(255, 120, 150, 0.88);
+}
+
+.hub-toggle__icon--off .hub-toggle__glyph {
+  color: rgba(255, 150, 170, 0.72);
+  opacity: 0.75;
+}
+
+.hub-toggle--on .hub-toggle__icon--on {
+  display: inline-flex;
+}
+
+.hub-toggle--on .hub-toggle__icon--off {
+  display: none;
+}
+
+.hub-toggle--off .hub-toggle__icon--on {
+  display: none;
+}
+
+.hub-toggle--off .hub-toggle__icon--off {
+  display: inline-flex;
+}
+
+.hub-toggle--off .hub-toggle__state {
+  border-color: rgba(255, 120, 150, 0.35);
+}
+
+.hub-toggle--loading .hub-toggle__icon--on,
+.hub-toggle--loading .hub-toggle__icon--off {
+  display: none;
+}
+
+.hub-toggle--loading .hub-toggle__state::after {
+  content: '?';
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.62rem;
+  color: rgba(255, 255, 255, 0.45);
+  letter-spacing: 0.08em;
+}

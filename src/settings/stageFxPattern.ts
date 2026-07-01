@@ -14,7 +14,9 @@ export function loadStageFxPattern(): number {
     const n = Number(stored);
     if (n === STAGE_FX_AUTO) return STAGE_FX_AUTO;
     if (isValidStageFxPattern(n)) return n;
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return DEFAULT_STAGE_FX_PATTERN;
 }
 
@@ -23,7 +25,9 @@ export function saveStageFxPattern(pattern: number): void {
     if (pattern === STAGE_FX_AUTO || isValidStageFxPattern(pattern)) {
       localStorage.setItem(STORAGE_KEY, String(pattern));
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 export function normalizeStageFxPattern(value: number): number {
