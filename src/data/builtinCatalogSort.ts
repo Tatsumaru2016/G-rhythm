@@ -72,10 +72,7 @@ export function firstBuiltinIndex(
   return sortBuiltinIndices(charts, settings)[0] ?? 0;
 }
 
-export function lastBuiltinIndex(
-  charts: readonly ChartData[],
-  settings: SongSortSettings,
-): number {
+export function lastBuiltinIndex(charts: readonly ChartData[], settings: SongSortSettings): number {
   const order = sortBuiltinIndices(charts, settings);
   return order[order.length - 1] ?? 0;
 }

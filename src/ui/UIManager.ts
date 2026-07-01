@@ -1999,7 +1999,9 @@ export class UIManager {
     this.syncSelectHubPreviewToggle();
   }
 
-  private syncSelectHubSelectedFolderChartUi(catalogIndex = this.customLoader.getSelectedIndex()): void {
+  private syncSelectHubSelectedFolderChartUi(
+    catalogIndex = this.customLoader.getSelectedIndex(),
+  ): void {
     if (this.selectHubBuiltinIndex !== null || this.screenId !== 'select') return;
 
     const catalog = this.customLoader.getCatalog();
