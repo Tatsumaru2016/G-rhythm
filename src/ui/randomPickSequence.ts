@@ -28,6 +28,8 @@ export const RANDOM_PICK_AUTO_START_MS = 3000;
 
 export const RANDOM_PICK_FLY_MS = 520;
 
+export const RANDOM_PICK_EXPAND_MS = 480;
+
 export const RANDOM_PICK_FLASH_MS = 650;
 
 export const RANDOM_PICK_DECIDE_FLASH_MS = 1200;

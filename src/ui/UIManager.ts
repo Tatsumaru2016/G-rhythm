@@ -51,6 +51,7 @@ import {
   randomRouletteStepDelay,
   RANDOM_PICK_AUTO_START_MS,
   RANDOM_PICK_DECIDE_FLASH_MS,
+  RANDOM_PICK_EXPAND_MS,
   RANDOM_PICK_FLASH_MS,
   RANDOM_PICK_FLY_MS,
   RANDOM_PICK_ROULETTE_STOP_MS,
@@ -419,6 +420,7 @@ export class UIManager {
     if (!btn) return;
     btn.classList.toggle('is-preview-playing', this.titleSoundEnabled);
     btn.classList.toggle('is-preview-paused', !this.titleSoundEnabled);
+    btn.classList.remove('is-preview-loading');
     btn.setAttribute('aria-pressed', String(this.titleSoundEnabled));
   }
 
@@ -432,7 +434,7 @@ export class UIManager {
       saveTitleSound(this.titleSoundEnabled);
       this.syncTitleSoundToggleState(btn);
       this.playUiSelect();
-      void this.syncTitleBgm();
+      void this.audio.resume().then(() => this.syncTitleBgm());
     });
   }
 
@@ -970,17 +972,22 @@ export class UIManager {
     `;
   }
 
-  private songPreviewStateHtml(id?: string, titleKey: MessageKey = 'ui.previewToggle'): string {
+  private songPreviewStateHtml(
+    id?: string,
+    titleKey: MessageKey = 'ui.previewToggle',
+    onLabelKey: MessageKey = 'ui.titleSoundOn',
+    offLabelKey: MessageKey = 'ui.titleSoundOff',
+  ): string {
     const idAttr = id ? ` id="${id}"` : '';
     return `
       <span class="song-preview-state"${idAttr} title="${t(titleKey)}">
         <span class="song-preview-icon song-preview-icon--on">
           <span class="song-preview-note" aria-hidden="true">\u266a</span>
-          <span class="song-preview-label">ON</span>
+          <span class="song-preview-label">${t(onLabelKey)}</span>
         </span>
         <span class="song-preview-icon song-preview-icon--off">
           <span class="song-preview-note" aria-hidden="true">\u266a</span>
-          <span class="song-preview-label">OFF</span>
+          <span class="song-preview-label">${t(offLabelKey)}</span>
         </span>
       </span>
     `;
@@ -1032,6 +1039,15 @@ export class UIManager {
                 <div class="song-info-eq-bars song-info-eq-bars--right" aria-hidden="true">${songInfoSideEqBarsHtml()}</div>
               </div>
             </div>
+          </div>
+        </div>
+        <div class="random-pick-stage-fx" id="random-pick-fx" hidden aria-live="polite">
+          <div class="random-pick-fx-scrim" aria-hidden="true"></div>
+          <div class="random-pick-fx-ring random-pick-fx-ring--outer" aria-hidden="true"></div>
+          <div class="random-pick-fx-ring random-pick-fx-ring--inner" aria-hidden="true"></div>
+          <div class="random-pick-fx-card">
+            <span class="random-pick-fx-kicker" id="random-pick-fx-kicker" hidden></span>
+            <span class="random-pick-fx-label" id="random-pick-fx-label"></span>
           </div>
         </div>
       </div>
@@ -1099,16 +1115,12 @@ export class UIManager {
         </div>
         <div class="song-ring-stage">
           ${this.songInfoPanelHtml(folderListMode)}
-          <div class="random-pick-fx" id="random-pick-fx" hidden aria-live="polite">
-            <div class="random-pick-fx-card">
-              <span class="random-pick-fx-label" id="random-pick-fx-label"></span>
-            </div>
-          </div>
         </div>
         ${this.selectHubSongBandHtml()}
         ${this.selectHubNavHtml()}
         <input type="file" id="audio-file-input" accept="audio/*,.mp3,.wav,.ogg,.flac,.m4a,.aac,.webm" hidden />
         <input type="file" id="audio-folder-input" accept="audio/*,.mp3,.wav,.ogg,.flac,.m4a,.aac,.webm" webkitdirectory multiple hidden />
+        <div class="random-pick-fly-layer" id="random-pick-fly-layer" aria-hidden="true"></div>
       </div>
     `);
 
@@ -1263,6 +1275,7 @@ export class UIManager {
     this.bindSelectHubSongBandNav();
     this.syncRandomPlayButton();
     this.syncSongBandNavButtons();
+    this.syncSelectHubPreviewToggle(false);
     requestAnimationFrame(() => this.scrollSelectedSongBandCardIntoView('auto'));
   }
 
@@ -1507,10 +1520,16 @@ export class UIManager {
     const screen = this.overlay.querySelector('#select-hub-screen');
     screen?.classList.toggle('is-random-pick-active', this.randomPickActive);
     screen?.classList.toggle('is-random-pick-locked', this.randomPickLocked);
+    screen?.classList.toggle('is-random-pick-spectacle', this.randomPickActive || this.randomPickLocked);
     screen?.classList.remove('is-random-pick-reveal', 'is-random-pick-decide');
 
     const fx = this.overlay.querySelector('#random-pick-fx') as HTMLElement | null;
-    if (fx) fx.hidden = true;
+    if (fx && !this.randomPickActive && !this.randomPickLocked) {
+      fx.hidden = true;
+      fx.classList.remove('random-pick-fx--decide', 'random-pick-fx--spin');
+      const kicker = this.overlay.querySelector('#random-pick-fx-kicker') as HTMLElement | null;
+      if (kicker) kicker.hidden = true;
+    }
 
     this.overlay.querySelector('#song-ring-center')
       ?.classList.remove(
@@ -1526,7 +1545,11 @@ export class UIManager {
   }
 
   private removeRandomPickFlyClone(): void {
-    document.querySelector('.random-pick-fly-clone')?.remove();
+    this.overlay.querySelector('#random-pick-fly-layer')?.replaceChildren();
+  }
+
+  private getRandomPickFlyLayer(): HTMLElement | null {
+    return this.overlay.querySelector('#random-pick-fly-layer') as HTMLElement | null;
   }
 
   private syncRandomPlayButton(): void {
@@ -1548,21 +1571,35 @@ export class UIManager {
   private setRandomPickFx(label: string, phase: 'spin' | 'reveal' | 'decide' | 'hidden'): void {
     const fx = this.overlay.querySelector('#random-pick-fx') as HTMLElement | null;
     const labelEl = this.overlay.querySelector('#random-pick-fx-label');
+    const kickerEl = this.overlay.querySelector('#random-pick-fx-kicker') as HTMLElement | null;
     const screen = this.overlay.querySelector('#select-hub-screen');
     if (!fx || !labelEl) return;
 
     if (phase === 'hidden') {
       fx.hidden = true;
-      fx.classList.remove('random-pick-fx--decide');
+      fx.classList.remove('random-pick-fx--decide', 'random-pick-fx--spin');
+      if (kickerEl) kickerEl.hidden = true;
       screen?.classList.remove('is-random-pick-reveal', 'is-random-pick-decide');
       return;
     }
 
     fx.hidden = false;
-    labelEl.textContent = label;
     fx.classList.toggle('random-pick-fx--decide', phase === 'decide');
+    fx.classList.toggle('random-pick-fx--spin', phase === 'spin');
     screen?.classList.toggle('is-random-pick-reveal', phase === 'reveal');
     screen?.classList.toggle('is-random-pick-decide', phase === 'decide');
+
+    if (phase === 'decide') {
+      if (kickerEl) {
+        kickerEl.hidden = false;
+        kickerEl.textContent = t('ui.randomPickDecidedHead');
+      }
+      labelEl.textContent = t('ui.randomPickDecidedSoon');
+      return;
+    }
+
+    if (kickerEl) kickerEl.hidden = true;
+    labelEl.textContent = label;
   }
 
   private async revealRandomPickDecision(gen: number, catalogIndex: number): Promise<boolean> {
@@ -1576,7 +1613,7 @@ export class UIManager {
     center?.classList.add('is-random-pick-landed');
     await this.playRandomPickPanelLand();
 
-    this.setRandomPickFx(t('ui.randomPickSongDecided'), 'decide');
+    this.setRandomPickFx(t('ui.randomPickDecidedSoon'), 'decide');
     await this.playRandomPickSongDecided();
 
     await this.sleep(RANDOM_PICK_DECIDE_FLASH_MS);
@@ -1710,42 +1747,93 @@ export class UIManager {
     const to = center.getBoundingClientRect();
     const fromCx = from.left + from.width / 2;
     const fromCy = from.top + from.height / 2;
-    const toCx = to.left + to.width / 2;
-    const toCy = to.top + to.height / 2;
-    const scaleEnd = Math.min(1, Math.max(0.55, to.width / Math.max(from.width, 1)));
+    const panelCx = to.left + to.width / 2;
+    const panelCy = to.top + to.height / 2;
 
     this.removeRandomPickFlyClone();
     listItem.classList.add('is-random-pick-source');
 
+    const screen = this.overlay.querySelector('#select-hub-screen');
+    screen?.classList.add('is-random-pick-fly');
+
     const clone = document.createElement('div');
     clone.className = 'random-pick-fly-clone';
-    clone.innerHTML = `<span class="random-pick-fly-clone-inner">${this.escapeHtml(entry.title)}</span>`;
+    clone.innerHTML = `
+      <div class="random-pick-fly-clone-inner">
+        <p class="random-pick-fly-clone-title">${this.escapeHtml(entry.title)}</p>
+      </div>
+    `;
     clone.style.width = `${from.width}px`;
     clone.style.height = `${from.height}px`;
-    document.body.appendChild(clone);
+    clone.style.minWidth = `${from.width}px`;
+    clone.style.maxWidth = `${from.width}px`;
+    clone.style.minHeight = `${from.height}px`;
+    const flyLayer = this.getRandomPickFlyLayer();
+    if (!flyLayer) {
+      listItem.classList.remove('is-random-pick-source');
+      screen?.classList.remove('is-random-pick-fly');
+      return false;
+    }
+    flyLayer.appendChild(clone);
 
-    const anim = clone.animate([
+    const waitAnim = (anim: Animation) => new Promise<void>((resolve) => {
+      anim.onfinish = () => resolve();
+      anim.oncancel = () => resolve();
+    });
+
+    await waitAnim(clone.animate([
       {
-        transform: `translate(${fromCx}px, ${fromCy}px) translate(-50%, -50%) scale(1)`,
+        transform: `translate(${fromCx}px, ${fromCy}px) translate(-50%, -50%) scale(1, 1)`,
         opacity: 1,
       },
       {
-        transform: `translate(${toCx}px, ${toCy}px) translate(-50%, -50%) scale(${scaleEnd})`,
-        opacity: 0.94,
+        transform: `translate(${panelCx}px, ${panelCy}px) translate(-50%, -50%) scale(1, 1)`,
+        opacity: 1,
       },
     ], {
       duration: RANDOM_PICK_FLY_MS,
       easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
       fill: 'forwards',
-    });
+    }));
 
-    await new Promise<void>((resolve) => {
-      anim.onfinish = () => resolve();
-      anim.oncancel = () => resolve();
-    });
+    if (gen !== this.randomPickGen || this.screenId !== 'select') {
+      this.removeRandomPickFlyClone();
+      listItem.classList.remove('is-random-pick-source');
+      screen?.classList.remove('is-random-pick-fly');
+      return false;
+    }
+
+    const panel = center.getBoundingClientRect();
+    const endCx = panel.left + panel.width / 2;
+    const endCy = panel.top + panel.height / 2;
+    const endScaleX = panel.width / Math.max(from.width, 1);
+    const endScaleY = panel.height / Math.max(from.height, 1);
+
+    clone.classList.add('random-pick-fly-clone--landing');
+
+    await waitAnim(clone.animate([
+      {
+        transform: `translate(${endCx}px, ${endCy}px) translate(-50%, -50%) scale(1, 1)`,
+        opacity: 1,
+        filter: 'brightness(1)',
+      },
+      {
+        transform: `translate(${endCx}px, ${endCy}px) translate(-50%, -50%) scale(${endScaleX}, ${endScaleY})`,
+        opacity: 1,
+        filter: 'brightness(1.65)',
+      },
+    ], {
+      duration: RANDOM_PICK_EXPAND_MS,
+      easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+      fill: 'forwards',
+    }));
+
+    center.classList.add('is-random-pick-flash');
+    void center.offsetWidth;
 
     this.removeRandomPickFlyClone();
     listItem.classList.remove('is-random-pick-source');
+    screen?.classList.remove('is-random-pick-fly');
 
     if (gen !== this.randomPickGen || this.screenId !== 'select') return false;
 
@@ -2433,19 +2521,11 @@ export class UIManager {
   private setSelectHubRingLoading(loading: boolean): void {
     if (this.overlay.querySelector('#folder-song-list-track')) {
       this.setSelectHubTrackItemLoading(loading);
-      const center = this.overlay.querySelector('#song-ring-center');
-      if (loading) {
-        center?.classList.add('is-preview-loading');
-      } else {
-        this.syncPreviewToggleState(center, false);
-      }
-      this.updateSelectHubDpadEnabled();
-      this.syncRandomPlayButton();
-      return;
+    } else {
+      this.overlay.querySelector('#select-hub-screen')?.classList.toggle('is-loading-track', loading);
     }
-    this.overlay.querySelector('#select-hub-screen')?.classList.toggle('is-loading-track', loading);
-    const center = this.overlay.querySelector('#song-ring-center');
-    this.syncPreviewToggleState(center, loading);
+    this.overlay.querySelector('#song-ring-center')?.classList.toggle('is-preview-loading', loading);
+    this.syncSelectHubPreviewToggle(loading);
     this.updateSelectHubDpadEnabled();
     this.syncRandomPlayButton();
   }
@@ -2554,7 +2634,6 @@ export class UIManager {
       if (this.audio.isPreviewEnabled()) {
         await this.audio.startUserPreview();
         if (gen !== this.selectHubTrackLoadGen) return;
-        this.syncSelectHubPreviewToggle(false);
       }
 
       if (!silent) {
@@ -2574,6 +2653,8 @@ export class UIManager {
         this.selectHubLoadingCatalogIndex = null;
         this.applySelectHubListLoadingState();
         this.setSelectHubRingLoading(false);
+      } else if (gen === this.selectHubTrackLoadGen) {
+        this.syncSelectHubPreviewToggle(false);
       }
     }
   }
