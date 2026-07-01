@@ -14,7 +14,6 @@ import {
 } from './stageFxPatterns';
 import {
   getPhaseColorScheme,
-  getPhasePatternWeightBias,
   PHASE_SIDE_FX_DRIVE,
   type PhaseColorScheme,
   type SongPhase,
@@ -44,7 +43,7 @@ export interface LaneBounds {
   hitLineY: number;
 }
 
-/** 0=Rings 1=PrismPulse 2=Plasma 3=AuroraFlow 4=Beams 5=Waves 6=NeonCascade 7=Scanlines 8=Starburst 9=CyberGrid */
+/** 0=Rings 1=PrismPulse 2=Plasma 3=AuroraFlow 4=Beams 5=Waves 6=NeonCascade 7=Scanlines 8=Starburst */
 const PATTERN_COUNT = STAGE_FX_PATTERN_COUNT;
 const BAND_COUNT = AUDIO_BAND_COUNT;
 
@@ -134,7 +133,7 @@ export class SideStageFX {
 
   /** 演出全体の派手さ係数 */
   private fxDrive(sync: MusicSync): number {
-    return 1.28 + sync.musicDrive * 0.45 + sync.perfectBoost * 0.55 + sync.hitBoost * 0.3;
+    return 1.42 + sync.musicDrive * 0.52 + sync.perfectBoost * 0.62 + sync.hitBoost * 0.34;
   }
 
   /** ビート同期の滑らかな波形（0→1→0、明滅・フラッシュなし） */
@@ -168,26 +167,22 @@ export class SideStageFX {
     return base;
   }
 
-  private assignPatterns(phase?: SongPhase): void {
+  private assignPatterns(phase: SongPhase): void {
     const base = this.patternWeights.length > 0
       ? this.patternWeights
       : getGenreVisualProfile(this.genre).patternWeights;
 
-    const weights = phase
-      ? base.map((w, i) => w * (getPhasePatternWeightBias(phase)[i] ?? 1))
-      : base;
-
-    const pick = pickSidePatterns(weights, this.debugPattern);
+    const pick = pickSidePatterns(base, this.debugPattern, phase);
     this.leftPattern = pick.left;
     this.rightPattern = pick.right;
     this.pairing = pick.pairing;
   }
 
-  private sidePanels(screenW: number, _screenH: number, bounds: LaneBounds): { left: SidePanel; right: SidePanel } {
+  private sidePanels(screenW: number, screenH: number, bounds: LaneBounds): { left: SidePanel; right: SidePanel } {
     const laneEnd = bounds.startX + bounds.width;
     return {
-      left: { x: 0, y: 0, w: 0, h: 0 },
-      right: { x: laneEnd, y: 0, w: screenW - laneEnd, h: _screenH },
+      left: { x: 0, y: 0, w: bounds.startX, h: screenH },
+      right: { x: laneEnd, y: 0, w: screenW - laneEnd, h: screenH },
     };
   }
 
@@ -493,7 +488,8 @@ export class SideStageFX {
     if (this.debugPattern === null && phase !== this.lastSongPhase) {
       this.assignPatterns(phase);
       if (this.lastSongPhase !== null && !this.reducedFlash) {
-        this.hitBoost = Math.max(this.hitBoost, phase === 'late' ? 0.55 : 0.38);
+        this.hitBoost = Math.max(this.hitBoost, phase === 'late' ? 0.72 : phase === 'mid' ? 0.52 : 0.38);
+        this.perfectBoost = Math.min(2.8, this.perfectBoost + (phase === 'late' ? 0.35 : 0.2));
       }
     }
     this.lastSongPhase = phase;
@@ -509,6 +505,10 @@ export class SideStageFX {
     ctx.save();
     ctx.globalCompositeOperation = 'screen';
     ctx.globalAlpha *= bright;
+
+    if (panels.left.w > 12) {
+      this.drawSidePanel(ctx, panels.left, this.leftPattern, drawSync, palette, 'left');
+    }
 
     if (panels.right.w > 12) {
       this.drawSidePanel(ctx, panels.right, this.rightPattern, drawSync, palette, 'right');
@@ -567,7 +567,6 @@ export class SideStageFX {
       case 6: this.drawNeonCascade(ctx, w, h, sync, palette, bandShift); break;
       case 7: this.drawScanlines(ctx, w, h, sync, palette, pattern, bandShift); break;
       case 8: this.drawStarburst(ctx, w, h, sync, palette, cx, cy, bandShift); break;
-      case 9: this.drawCyberGrid(ctx, w, h, sync, palette, cx, cy); break;
     }
   }
 
@@ -580,7 +579,7 @@ export class SideStageFX {
     cx: number,
     cy: number,
   ) {
-    const pulse = (0.16 + sync.musicDrive * 0.22 + sync.perfectBoost * 0.2) * this.fxDrive(sync);
+    const pulse = (0.2 + sync.musicDrive * 0.26 + sync.perfectBoost * 0.24) * this.fxDrive(sync);
     const maxR = Math.max(w, h) * 0.9;
     const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, maxR);
     grad.addColorStop(0, this.psyColor(this.phaseHue(sync, palette), palette.saturation, 60, pulse * 0.62, palette));
@@ -1013,59 +1012,6 @@ export class SideStageFX {
     ctx.beginPath();
     ctx.arc(cx, cy, coreR, 0, Math.PI * 2);
     ctx.fill();
-  }
-
-  private drawCyberGrid(
-    ctx: CanvasRenderingContext2D,
-    w: number, h: number,
-    sync: MusicSync,
-    palette: PhaseColorScheme,
-    cx: number, cy: number,
-  ) {
-    const horizon = cy;
-    const rows = 14;
-    const cols = 18;
-    const depth = 1 + sync.musicDrive * 0.75 + sync.perfectBoost * 0.65;
-    const flow = this.beatFlow(sync);
-    const scroll = (this.time * 80 * depth * (1 + flow * 0.35)) % 40;
-    const fx = this.fxDrive(sync);
-
-    // 地平線グロー
-    const horizonGrad = ctx.createLinearGradient(0, horizon - 40, 0, horizon + 40);
-    horizonGrad.addColorStop(0, 'transparent');
-    horizonGrad.addColorStop(0.5, this.psyColor(this.phaseHue(sync, palette), palette.saturation, 70, 0.22 * fx, palette));
-    horizonGrad.addColorStop(1, 'transparent');
-    ctx.fillStyle = horizonGrad;
-    ctx.fillRect(0, horizon - 50, w, 100);
-
-    for (let r = 0; r <= rows; r++) {
-      const t = r / rows;
-      const y = horizon + (h - horizon) * t * t;
-      const level = this.bandValue(r % BAND_COUNT);
-      const hue = this.phaseHue(sync, palette, r * 18);
-      ctx.strokeStyle = this.psyColor(hue, palette.saturation, 60, (0.14 + level * 0.32 + sync.perfectBoost * 0.14) * fx, palette);
-      ctx.lineWidth = 1.5 + level * 2.2;
-      ctx.shadowColor = this.psyColor(hue, palette.saturation, 68, 0.5, palette);
-      ctx.shadowBlur = r % 3 === 0 ? 6 + level * 8 : 0;
-      ctx.beginPath();
-      ctx.moveTo(0, y + scroll * t);
-      ctx.lineTo(w, y + scroll * t);
-      ctx.stroke();
-    }
-    ctx.shadowBlur = 0;
-
-    for (let c = 0; c <= cols; c++) {
-      const t = c / cols;
-      const x = cx + (t - 0.5) * w * 0.9;
-      const level = this.bandValue(c % BAND_COUNT);
-      const hue = this.phaseHue(sync, palette, c * 14 + palette.hueSecondary * 0.2);
-      ctx.strokeStyle = this.psyColor(hue, palette.saturation, 60, (0.12 + level * 0.28) * fx, palette);
-      ctx.lineWidth = 1.2 + level * 1.8;
-      ctx.beginPath();
-      ctx.moveTo(x, horizon);
-      ctx.lineTo(cx + (t - 0.5) * w * 1.4, h + scroll);
-      ctx.stroke();
-    }
   }
 
   private drawHitOverlay(

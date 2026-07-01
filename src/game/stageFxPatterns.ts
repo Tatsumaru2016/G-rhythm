@@ -1,6 +1,12 @@
 import { pickWeightedPattern } from '../audio/musicGenre';
+import {
+  getPhaseStageFxPatterns,
+  maskPatternWeightsForPhase,
+  type SongPhase,
+} from './scrollPhase';
 
-/** 0=Rings … 9=CyberGrid（SideStageFX と同期） */export const STAGE_FX_PATTERN_COUNT = 10;
+/** 0=Rings … 8=Starburst（SideStageFX と同期・計9種） */
+export const STAGE_FX_PATTERN_COUNT = 9;
 
 export const STAGE_FX_PATTERN_IDS = [
   'rings',
@@ -12,13 +18,18 @@ export const STAGE_FX_PATTERN_IDS = [
   'neonCascade',
   'scanlines',
   'starburst',
-  'cyberGrid',
 ] as const;
 
 export type StageFxPatternId = (typeof STAGE_FX_PATTERN_IDS)[number];
 
 /** 左右の演出が同じか別パターンか */
 export type SideFxPairing = 'unified' | 'split';
+
+const PHASE_SPLIT_PAIRS: Record<SongPhase, readonly [number, number][]> = {
+  early: [[0, 1], [0, 2], [1, 2]],
+  mid: [[3, 4], [3, 5], [4, 5]],
+  late: [[6, 7], [6, 8], [7, 8]],
+};
 
 export function isValidStageFxPattern(index: number): boolean {
   return Number.isInteger(index) && index >= 0 && index < STAGE_FX_PATTERN_COUNT;
@@ -28,12 +39,12 @@ export function stageFxPatternI18nKey(index: number): string {
   return `debug.fx.${STAGE_FX_PATTERN_IDS[index]}`;
 }
 
-/** サイドパネル向き — 左右で組み合わせるカーブ */
-const CURATED_SPLIT_PAIRS: readonly [number, number][] = [
-  [6, 5], [6, 7], [5, 4], [4, 3], [7, 5], [7, 6],
-  [0, 8], [8, 4], [9, 6], [1, 7], [2, 6], [3, 5],
-  [6, 0], [5, 9], [4, 1],
-];
+export function getStageFxPatternPhase(pattern: number): SongPhase | null {
+  if (!isValidStageFxPattern(pattern)) return null;
+  if (pattern <= 2) return 'early';
+  if (pattern <= 5) return 'mid';
+  return 'late';
+}
 
 export interface SidePatternPick {
   left: number;
@@ -44,20 +55,24 @@ export interface SidePatternPick {
 export function pickSidePatterns(
   weights: readonly number[],
   debugPattern: number | null,
+  phase: SongPhase,
 ): SidePatternPick {
   if (debugPattern !== null && isValidStageFxPattern(debugPattern)) {
     return { left: debugPattern, right: debugPattern, pairing: 'unified' };
   }
 
-  if (Math.random() < 0.44) {
-    const pair = CURATED_SPLIT_PAIRS[Math.floor(Math.random() * CURATED_SPLIT_PAIRS.length)];
+  const phaseWeights = maskPatternWeightsForPhase(weights, phase);
+  const pairs = PHASE_SPLIT_PAIRS[phase];
+
+  if (Math.random() < 0.44 && pairs.length > 0) {
+    const pair = pairs[Math.floor(Math.random() * pairs.length)];
     if (Math.random() < 0.5) {
       return { left: pair[0], right: pair[1], pairing: 'split' };
     }
     return { left: pair[1], right: pair[0], pairing: 'split' };
   }
 
-  const unified = pickWeightedPattern([...weights]);
+  const unified = pickWeightedPattern([...phaseWeights]);
   return { left: unified, right: unified, pairing: 'unified' };
 }
 
@@ -65,11 +80,17 @@ export function pickSidePatterns(
 export function pickSplitRefresh(
   weights: readonly number[],
   keep: number,
+  phase: SongPhase,
 ): number {
-  let next = pickWeightedPattern([...weights]);
+  const phaseWeights = maskPatternWeightsForPhase(weights, phase);
+  let next = pickWeightedPattern([...phaseWeights]);
   let guard = 0;
   while (next === keep && guard++ < 14) {
-    next = pickWeightedPattern([...weights]);
+    next = pickWeightedPattern([...phaseWeights]);
   }
   return next;
+}
+
+export function listPatternsForPhase(phase: SongPhase): readonly number[] {
+  return getPhaseStageFxPatterns(phase);
 }

@@ -5,24 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/prepare-assets.mjs && vite build && node scripts/strip-deploy-models.mjs",
+    "build": "vite build",
     "build:check": "tsc && npm run build",
     "sync:charts": "tsx scripts/sync-builtin-charts.ts",
-    "prepare:assets": "node scripts/prepare-assets.mjs",
-    "compress:models": "node scripts/compress-models.mjs",
-    "copy:decoders": "node scripts/copy-three-decoders.mjs",
-    "postinstall": "node scripts/prepare-assets.mjs --decoders-only",
     "preview": "vite preview"
   },
   "devDependencies": {
-    "@gltf-transform/cli": "^4.2.1",
-    "@types/three": "^0.185.0",
     "audio-decode": "^3.11.0",
     "tsx": "^4.22.4",
     "typescript": "^5.7.2",
     "vite": "^6.0.3"
-  },
-  "dependencies": {
-    "three": "^0.185.0"
   }
 }

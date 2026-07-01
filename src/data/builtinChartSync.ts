@@ -4,10 +4,10 @@ import { analyzeGenre } from '../audio/musicGenre';
 import { chartDisplayLevel } from '../chart/chartRadar';
 
 const BUILTIN_LIMITS: Record<CustomDifficulty, { maxDurationSec: number; maxNotes: number }> = {
-  EASY: { maxDurationSec: 60, maxNotes: 36 },
-  NORMAL: { maxDurationSec: 75, maxNotes: 48 },
-  HARD: { maxDurationSec: 90, maxNotes: 72 },
-  EXTREME: { maxDurationSec: 105, maxNotes: 96 },
+  EASY: { maxDurationSec: 55, maxNotes: 34 },
+  NORMAL: { maxDurationSec: 72, maxNotes: 52 },
+  HARD: { maxDurationSec: 88, maxNotes: 76 },
+  EXTREME: { maxDurationSec: 108, maxNotes: 104 },
 };
 
 function hashId(id: string): number {
@@ -62,16 +62,6 @@ function capNotes(notes: ChartNote[], maxNotes: number): ChartNote[] {
     picked.push(notes[Math.floor(i * step)]);
   }
   return picked;
-}
-
-export function computeBuiltinLevel(difficulty: CustomDifficulty, noteCount: number): number {
-  const base: Record<CustomDifficulty, number> = {
-    EASY: 1,
-    NORMAL: 2,
-    HARD: 4,
-    EXTREME: 6,
-  };
-  return Math.min(15, Math.max(1, base[difficulty] + Math.round(noteCount / 14)));
 }
 
 function levelFromSyncedChart(chart: ChartData, notes: ChartNote[], bpm: number, genre: MusicGenre): number {

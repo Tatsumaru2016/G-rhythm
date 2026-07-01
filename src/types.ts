@@ -44,6 +44,8 @@ export interface ChartData {
   /** 手動タグまたは自動判定 */
   genre?: MusicGenre;
   genreConfidence?: number;
+  /** localStorage 用の安定した曲識別キー */
+  songRecordKey?: string;
 }
 
 export interface ActiveNote {
@@ -74,6 +76,16 @@ export interface GameStats {
   good: number;
   bad: number;
   miss: number;
+  /** フリーズアロー成功（O.K.） */
+  ok?: number;
+  /** フリーズアロー失敗（N.G.） */
+  ng?: number;
+  /** ダンスゲージ枯渇などでステージ落ち */
+  failed?: boolean;
+  /** ミス0（フルコンボ） */
+  fullCombo?: boolean;
+  /** 全てPERFECT（PFC） */
+  perfectFullCombo?: boolean;
 }
 
 export const LANE_KEYS = ['d', 'f', 'j', 'k'] as const;

@@ -29,7 +29,7 @@ export function applyBuiltinAudioSync(buffers: ReadonlyMap<string, AudioBuffer>)
 
 export function getRank(stats: GameStats, chart: ChartData): DdrGrade {
   const score = computeDdrMillionScore(stats, chart);
-  return getDdrGrade(score);
+  return getDdrGrade(score, stats.failed === true);
 }
 
 export function getAccuracy(stats: GameStats): string {

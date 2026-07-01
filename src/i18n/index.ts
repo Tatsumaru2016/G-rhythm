@@ -63,6 +63,12 @@ export function tJudgment(judgment: JudgmentType): string {
   return t(`judgment.${judgment}`);
 }
 
+export type FreezeJudgment = 'ok' | 'ng';
+
+export function tFreezeJudgment(judgment: FreezeJudgment): string {
+  return t(`judgment.${judgment}`);
+}
+
 export function tDifficultyHint(difficulty: 'EASY' | 'NORMAL' | 'HARD' | 'EXTREME'): string {
   const key: MessageKey = {
     EASY: 'difficulty.easy',

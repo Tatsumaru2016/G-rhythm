@@ -18,65 +18,85 @@ interface DifficultyConfig {
   holdEnergy: number;
   holdBeatMod: number;
   holdDuration: number;
+  holdSpawnChance: number;
   chordChance: number;
   maxChordLanes: number;
   fallbackStep: number;
-  levelBonus: number;
 }
 
+/** DDR 4 段階（BEGINNER / BASIC / DIFFICULT / EXPERT）に相当する自動譜面スケール */
 const DIFFICULTY_CONFIG: Record<CustomDifficulty, DifficultyConfig> = {
   EASY: {
-    minGapSec: 0.62,
-    minBeatGap: 10,
+    minGapSec: 0.58,
+    minBeatGap: 14,
     holdChance: false,
     holdEnergy: 1,
     holdBeatMod: 32,
     holdDuration: 4,
+    holdSpawnChance: 0,
     chordChance: 0,
-    maxChordLanes: 2,
-    fallbackStep: 10,
-    levelBonus: -1,
+    maxChordLanes: 1,
+    fallbackStep: 12,
   },
   NORMAL: {
-    minGapSec: 0.4,
-    minBeatGap: 5,
+    minGapSec: 0.36,
+    minBeatGap: 6,
     holdChance: false,
     holdEnergy: 0.14,
     holdBeatMod: 16,
     holdDuration: 4,
-    chordChance: 0.12,
+    holdSpawnChance: 0,
+    chordChance: 0.1,
     maxChordLanes: 2,
-    fallbackStep: 6,
-    levelBonus: 0,
+    fallbackStep: 8,
   },
   HARD: {
-    minGapSec: 0.27,
-    minBeatGap: 3,
+    minGapSec: 0.22,
+    minBeatGap: 2,
     holdChance: false,
     holdEnergy: 0.11,
     holdBeatMod: 12,
     holdDuration: 6,
-    chordChance: 0.24,
+    holdSpawnChance: 0,
+    chordChance: 0.2,
     maxChordLanes: 3,
     fallbackStep: 4,
-    levelBonus: 2,
   },
   EXTREME: {
-    minGapSec: 0.17,
+    minGapSec: 0.14,
     minBeatGap: 1,
     holdChance: true,
-    holdEnergy: 0.08,
-    holdBeatMod: 8,
-    holdDuration: 8,
-    chordChance: 0.34,
+    holdEnergy: 0.04,
+    holdBeatMod: 4,
+    holdDuration: 12,
+    holdSpawnChance: 0.48,
+    chordChance: 0.28,
     maxChordLanes: 4,
     fallbackStep: 2,
-    levelBonus: 4,
   },
 };
 
 export function getCustomDifficultyHint(difficulty: CustomDifficulty): string {
   return tDifficultyHint(difficulty);
+}
+
+const DIFFICULTY_HUD_COLORS: Record<string, string> = {
+  easy: '#00ff88',
+  normal: '#00e5ff',
+  hard: '#ffd700',
+  extreme: '#ff2d6a',
+};
+
+export function formatChartDifficultyLabel(difficulty: string): string {
+  return difficulty.toUpperCase();
+}
+
+export function difficultyCssClass(difficulty: string): string {
+  return difficulty.toLowerCase();
+}
+
+export function difficultyHudColor(difficulty: string): string {
+  return DIFFICULTY_HUD_COLORS[difficulty.toLowerCase()] ?? '#00e5ff';
 }
 
 interface Onset {
@@ -162,9 +182,10 @@ function notesAtBeat(
   onset: Onset,
   cfg: DifficultyConfig,
 ): ChartNote[] {
+  const onHoldGrid = beat % cfg.holdBeatMod === 0;
   const isHold = cfg.holdChance
-    && onset.energy > cfg.holdEnergy
-    && beat % cfg.holdBeatMod === 0;
+    && onHoldGrid
+    && (onset.energy > cfg.holdEnergy || Math.random() < cfg.holdSpawnChance);
 
   if (isHold) {
     return [{ lane, beat, type: 'hold', duration: cfg.holdDuration }];

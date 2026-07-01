@@ -66,36 +66,33 @@ export const PHASE_BACKGROUND_THEMES: Record<SongPhase, PhaseBackgroundTheme> = 
 
 /** サイドFXのフェーズ別強度 */
 export const PHASE_SIDE_FX_DRIVE: Record<SongPhase, number> = {
-  early: 0.84,
-  mid: 1.0,
-  late: 1.2,
+  early: 0.92,
+  mid: 1.08,
+  late: 1.32,
 };
 
-/** サイドFXパターンのフェーズ別重み（0=Rings … 9=CyberGrid） */
-export function getPhasePatternWeightBias(phase: SongPhase): readonly number[] {
-  const w = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1];
-  if (phase === 'early') {
-    w[0] = 1.9;
-    w[5] = 1.7;
-    w[3] = 1.5;
-    w[9] = 1.2;
-    w[7] = 0.55;
-    w[8] = 0.5;
-  } else if (phase === 'mid') {
-    w[1] = 1.8;
-    w[2] = 1.7;
-    w[3] = 1.6;
-    w[6] = 1.4;
-    w[0] = 0.85;
-  } else {
-    w[4] = 1.9;
-    w[6] = 1.75;
-    w[7] = 1.65;
-    w[8] = 1.85;
-    w[9] = 1.45;
-    w[5] = 0.7;
-  }
-  return w;
+/** フェーズ別サイドFXパターン（0–8）。フェーズ間で重複なし */
+export const PHASE_STAGE_FX_PATTERNS: Record<SongPhase, readonly number[]> = {
+  early: [0, 1, 2],
+  mid: [3, 4, 5],
+  late: [6, 7, 8],
+};
+
+export function getPhaseStageFxPatterns(phase: SongPhase): readonly number[] {
+  return PHASE_STAGE_FX_PATTERNS[phase];
+}
+
+export function isStageFxPatternInPhase(pattern: number, phase: SongPhase): boolean {
+  return PHASE_STAGE_FX_PATTERNS[phase].includes(pattern);
+}
+
+/** 現フェーズの3パターンだけ重みを残す */
+export function maskPatternWeightsForPhase(weights: readonly number[], phase: SongPhase): number[] {
+  const pool = new Set(PHASE_STAGE_FX_PATTERNS[phase]);
+  const masked = weights.map((w, i) => (pool.has(i) ? w : 0));
+  const total = masked.reduce((s, w) => s + w, 0);
+  if (total > 0) return masked;
+  return PHASE_STAGE_FX_PATTERNS[phase].map(() => 1);
 }
 
 export function getPhaseColorScheme(phase: SongPhase): PhaseColorScheme {
@@ -108,25 +105,6 @@ export function getSongPhase(time: number, duration: number): SongPhase {
   if (progress < 1 / 3) return 'early';
   if (progress < 2 / 3) return 'mid';
   return 'late';
-}
-
-/** ダンサー用サブフェーズ（序盤/中盤/終盤を各4分割 = 12区間） */
-export type DancerSubPhase =
-  | 'early1' | 'early2' | 'early3' | 'early4'
-  | 'mid1' | 'mid2' | 'mid3' | 'mid4'
-  | 'late1' | 'late2' | 'late3' | 'late4';
-
-const DANCER_SUB_PHASES: DancerSubPhase[] = [
-  'early1', 'early2', 'early3', 'early4',
-  'mid1', 'mid2', 'mid3', 'mid4',
-  'late1', 'late2', 'late3', 'late4',
-];
-
-export function getDancerSubPhase(time: number, duration: number): DancerSubPhase {
-  if (duration <= 0) return 'early1';
-  const progress = Math.max(0, Math.min(0.999999, time / duration));
-  const idx = Math.min(DANCER_SUB_PHASES.length - 1, Math.floor(progress * DANCER_SUB_PHASES.length));
-  return DANCER_SUB_PHASES[idx];
 }
 
 export function getPhaseScrollMultiplier(time: number, duration: number): number {

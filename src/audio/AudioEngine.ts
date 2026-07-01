@@ -51,6 +51,7 @@ export class AudioEngine {
   private titleBgmGain: GainNode | null = null;
   private startSoundBuffer: AudioBuffer | null = null;
   private countdownTickBuffer: AudioBuffer | null = null;
+  private activeCountdownSequence: AudioBufferSourceNode | null = null;
   private resultAnnounceBuffer: AudioBuffer | null = null;
   private resultVoiceBuffers = new Map<ResultVoiceId, AudioBuffer>();
   private gameplayCheerBuffers: AudioBuffer[] = [];
@@ -64,6 +65,11 @@ export class AudioEngine {
   private songFinishCheerBuffer: AudioBuffer | null = null;
   private songFinishCheerUrl: string | null = null;
   private songFinishCheerLoadPromise: Promise<void> | null = null;
+  private dangerVoiceBuffer: AudioBuffer | null = null;
+  private activeDangerVoice: AudioBufferSourceNode | null = null;
+  private unlockListenersBound = false;
+  private wantsTitleBgmPlay = false;
+  private pendingPreview: { buffer: AudioBuffer; loop: boolean; offset: number } | null = null;
 
   async decodeArrayBuffer(arrayBuffer: ArrayBuffer): Promise<AudioBuffer> {
     await this.init();
@@ -225,6 +231,34 @@ export class AudioEngine {
     src.start(0);
   }
 
+  async loadDangerVoice(url: string): Promise<void> {
+    if (this.dangerVoiceBuffer) return;
+    try {
+      this.dangerVoiceBuffer = await this.loadTrackFromUrl(url);
+    } catch (err) {
+      console.warn('[AudioEngine] danger voice load failed', url, err);
+    }
+  }
+
+  playDangerVoice(): void {
+    if (!this.ctx || !this.sfxGain || !this.dangerVoiceBuffer) return;
+    if (this.activeDangerVoice) {
+      try { this.activeDangerVoice.stop(); } catch { /* already stopped */ }
+      this.activeDangerVoice = null;
+    }
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.dangerVoiceBuffer;
+    const gain = this.ctx.createGain();
+    gain.gain.value = 0.95;
+    src.connect(gain);
+    gain.connect(this.sfxGain);
+    src.onended = () => {
+      if (this.activeDangerVoice === src) this.activeDangerVoice = null;
+    };
+    src.start(0);
+    this.activeDangerVoice = src;
+  }
+
   stopRandomPickRoulette(): void {
     if (!this.activeRandomPickRoulette) return;
     try { this.activeRandomPickRoulette.stop(); } catch { /* already stopped */ }
@@ -281,7 +315,18 @@ export class AudioEngine {
   async playTitleBgm(): Promise<void> {
     if (!this.titleBgmBuffer) return;
     await this.resume();
-    if (!this.ctx || !this.masterGain) return;
+    if (!this.isContextRunning()) {
+      this.wantsTitleBgmPlay = true;
+      this.ensureUnlockListeners();
+      return;
+    }
+    this.wantsTitleBgmPlay = false;
+    this.startTitleBgmSource();
+  }
+
+  private startTitleBgmSource(): void {
+    if (!this.titleBgmBuffer || !this.ctx || !this.masterGain) return;
+    if (!this.isContextRunning()) return;
     this.stopTitleBgm();
 
     if (!this.titleBgmGain) {
@@ -299,6 +344,7 @@ export class AudioEngine {
   }
 
   stopTitleBgm(): void {
+    this.wantsTitleBgmPlay = false;
     if (!this.titleBgmSource) return;
     try { this.titleBgmSource.stop(); } catch { /* already stopped */ }
     this.titleBgmSource = null;
@@ -337,11 +383,55 @@ export class AudioEngine {
     this.sfxGain = this.ctx.createGain();
     this.sfxGain.gain.value = 0.7;
     this.sfxGain.connect(this.masterGain);
+    this.ensureUnlockListeners();
   }
 
   async resume(): Promise<void> {
     await this.init();
-    if (this.ctx?.state === 'suspended') await this.ctx.resume();
+    if (this.ctx?.state === 'suspended') {
+      try {
+        await this.ctx.resume();
+      } catch {
+        /* autoplay policy — wait for user gesture */
+      }
+    }
+  }
+
+  private isContextRunning(): boolean {
+    return this.ctx?.state === 'running';
+  }
+
+  private ensureUnlockListeners(): void {
+    if (this.unlockListenersBound) return;
+    this.unlockListenersBound = true;
+    const onGesture = () => { void this.flushPendingAfterUnlock(); };
+    window.addEventListener('pointerdown', onGesture, true);
+    window.addEventListener('keydown', onGesture, true);
+    window.addEventListener('touchstart', onGesture, true);
+  }
+
+  private async flushPendingAfterUnlock(): Promise<void> {
+    await this.init();
+    if (!this.ctx) return;
+    if (this.ctx.state === 'suspended') {
+      try {
+        await this.ctx.resume();
+      } catch {
+        return;
+      }
+    }
+    if (!this.isContextRunning()) return;
+
+    if (this.wantsTitleBgmPlay && this.titleBgmBuffer) {
+      this.wantsTitleBgmPlay = false;
+      this.startTitleBgmSource();
+    }
+
+    const pending = this.pendingPreview;
+    if (pending) {
+      this.pendingPreview = null;
+      this.startBufferPreviewNow(pending.buffer, pending.loop, pending.offset);
+    }
   }
 
   getCurrentTime(): number {
@@ -385,7 +475,17 @@ export class AudioEngine {
     this.previewEnabled = true;
     this.previewPlaybackBuffer = buffer;
     await this.resume();
-    if (!this.ctx || !this.musicGain) return;
+    if (!this.isContextRunning()) {
+      this.pendingPreview = { buffer, loop, offset };
+      this.ensureUnlockListeners();
+      return;
+    }
+    this.pendingPreview = null;
+    this.startBufferPreviewNow(buffer, loop, offset);
+  }
+
+  private startBufferPreviewNow(buffer: AudioBuffer, loop: boolean, offset: number): void {
+    if (!this.ctx || !this.musicGain || !this.isContextRunning()) return;
     this.clearPreviewSource();
     this.previewLoop = loop;
     this.previewOffset = offset;
@@ -427,6 +527,7 @@ export class AudioEngine {
         ? elapsed % buffer.duration
         : Math.min(Math.max(0, elapsed), buffer.duration);
     }
+    this.pendingPreview = null;
     this.clearPreviewSource();
     this.previewPaused = false;
     this.previewEnabled = false;
@@ -451,6 +552,7 @@ export class AudioEngine {
 
   /** 曲切り替え時: 再生だけ止め、ON/OFFの選択は維持 */
   stopPreviewPlayback(): void {
+    this.pendingPreview = null;
     this.clearPreviewSource();
     this.previewPaused = false;
   }
@@ -629,6 +731,7 @@ export class AudioEngine {
     this.stopTitleBgm();
     this.stopUserPreview();
     this.stopGameplayCheer();
+    this.stopCountdownSequence();
     for (const node of this.scheduledNodes) {
       try { node.stop(); } catch { /* already stopped */ }
     }
@@ -900,8 +1003,18 @@ export class AudioEngine {
   playMissSound(): void {
     if (!this.ctx || !this.sfxGain) return;
     const t = this.ctx.currentTime;
-    this.cyberDrop(t, 180, 45, 0.18, 0.18);
-    this.cyberGlitch(t, 0.08, 0.1, 800, 220);
+    this.cyberDrop(t, 200, 48, 0.2, 0.2);
+    this.cyberGlitch(t, 0.1, 0.12, 720, 180);
+    this.cyberDrop(t + 0.04, 90, 38, 0.1, 0.14);
+  }
+
+  playGameOverSound(): void {
+    if (!this.ctx || !this.sfxGain) return;
+    const t = this.ctx.currentTime;
+    this.cyberDrop(t, 72, 52, 0.34, 0.28);
+    this.cyberGlitch(t + 0.06, 0.18, 0.16, 280, 90);
+    this.cyberDrop(t + 0.12, 48, 40, 0.22, 0.2);
+    this.cyberFmBlip(t + 0.2, 180, 90, 120, 0.14, 0.1, 400);
   }
 
   playJudgmentVoice(judgment: JudgmentType): void {
@@ -976,11 +1089,13 @@ export class AudioEngine {
     this.cyberGlitch(t + 0.02, 0.04, 0.035, 1200, 7000);
   }
 
-  /** カウントダウン 3・2・1（およびお任せの 5〜1） */
+  /** カウントダウン 5〜1（連続クリップは先頭の1回のみ再生） */
   playCountdownTick(num: number): void {
     if (!this.ctx || !this.sfxGain) return;
     if (this.countdownTickBuffer) {
-      this.playCountdownBeep();
+      if (!this.activeCountdownSequence) {
+        this.playCountdownBeep(0.92, 1, true);
+      }
       return;
     }
     this.playCountdownTickSynth(num);
@@ -990,13 +1105,18 @@ export class AudioEngine {
   playCountdownStart(): void {
     if (!this.ctx || !this.sfxGain) return;
     if (this.countdownTickBuffer) {
-      this.playCountdownBeep();
       return;
     }
     this.playCountdownStartSynth();
   }
 
-  private playCountdownBeep(volume = 0.88, playbackRate = 1): void {
+  private stopCountdownSequence(): void {
+    if (!this.activeCountdownSequence) return;
+    try { this.activeCountdownSequence.stop(); } catch { /* already stopped */ }
+    this.activeCountdownSequence = null;
+  }
+
+  private playCountdownBeep(volume = 0.88, playbackRate = 1, trackSequence = false): void {
     if (!this.ctx || !this.sfxGain || !this.countdownTickBuffer) return;
     const src = this.ctx.createBufferSource();
     src.buffer = this.countdownTickBuffer;
@@ -1005,6 +1125,13 @@ export class AudioEngine {
     gain.gain.value = volume;
     src.connect(gain);
     gain.connect(this.sfxGain);
+    if (trackSequence) {
+      this.stopCountdownSequence();
+      this.activeCountdownSequence = src;
+      src.onended = () => {
+        if (this.activeCountdownSequence === src) this.activeCountdownSequence = null;
+      };
+    }
     src.start();
   }
 
@@ -1024,7 +1151,7 @@ export class AudioEngine {
   private playCountdownTickSynth(num: number): void {
     if (!this.ctx || !this.sfxGain) return;
     const t = this.ctx.currentTime;
-    const freqs: Record<number, number> = { 3: 370, 2: 494, 1: 622 };
+    const freqs: Record<number, number> = { 5: 280, 4: 310, 3: 370, 2: 494, 1: 622 };
     const freq = freqs[num] ?? 440;
     const vol = num === 1 ? 0.1 : 0.085;
     this.cyberBlip(t, freq, vol, 0.09, 'square', freq * 1.35, 2800 + num * 300);

@@ -279,41 +279,41 @@ const GENRE_CHART: Record<MusicGenre, GenreChartModifiers> = {
   },
 };
 
-/** 0=Rings 1=PrismPulse 2=Plasma 3=AuroraFlow 4=Beams 5=Waves 6=NeonCascade 7=Scanlines 8=Starburst 9=CyberGrid */
+/** 0=Rings 1=PrismPulse 2=Plasma 3=AuroraFlow 4=Beams 5=Waves 6=NeonCascade 7=Scanlines 8=Starburst */
 const GENRE_VISUAL: Record<MusicGenre, GenreVisualProfile> = {
   electronic: {
     hueBase: 285, hueSecondary: 195, hueAccent: 320, saturation: 96,
-    patternWeights: [1, 2, 3, 1, 2, 1, 4, 1, 3, 4],
+    patternWeights: [1, 2, 3, 1, 2, 1, 4, 1, 3],
     driveScale: 1.15,
   },
   rock: {
     hueBase: 350, hueSecondary: 25, hueAccent: 5, saturation: 94,
-    patternWeights: [3, 1, 1, 2, 4, 2, 4, 3, 2, 1],
+    patternWeights: [3, 1, 1, 2, 4, 2, 4, 3, 2],
     driveScale: 1.2,
   },
   pop: {
     hueBase: 310, hueSecondary: 55, hueAccent: 200, saturation: 90,
-    patternWeights: [2, 2, 2, 3, 2, 2, 3, 1, 3, 1],
+    patternWeights: [2, 2, 2, 3, 2, 2, 3, 1, 3],
     driveScale: 1.0,
   },
   jazz: {
     hueBase: 38, hueSecondary: 280, hueAccent: 160, saturation: 82,
-    patternWeights: [1, 1, 2, 3, 2, 4, 3, 1, 2, 1],
+    patternWeights: [1, 1, 2, 3, 2, 4, 3, 1, 2],
     driveScale: 0.95,
   },
   classical: {
     hueBase: 220, hueSecondary: 45, hueAccent: 260, saturation: 72,
-    patternWeights: [2, 1, 1, 4, 1, 2, 3, 1, 3, 1],
+    patternWeights: [2, 1, 1, 4, 1, 2, 3, 1, 3],
     driveScale: 0.88,
   },
   hiphop: {
     hueBase: 130, hueSecondary: 300, hueAccent: 50, saturation: 88,
-    patternWeights: [2, 1, 2, 2, 3, 2, 5, 4, 2, 3],
+    patternWeights: [2, 1, 2, 2, 3, 2, 5, 4, 2],
     driveScale: 1.1,
   },
   other: {
     hueBase: 240, hueSecondary: 300, hueAccent: 180, saturation: 88,
-    patternWeights: [1, 1, 1, 1, 1, 1, 3, 1, 1, 1],
+    patternWeights: [1, 1, 1, 1, 1, 1, 3, 1, 1],
     driveScale: 1.0,
   },
 };

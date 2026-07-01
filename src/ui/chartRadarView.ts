@@ -2,13 +2,23 @@ import {
   analyzeChartRadar,
   CHART_RADAR_AXES,
   chartDisplayLevel,
+  type ChartRadarAxis,
   type ChartRadarStats,
 } from '../chart/chartRadar';
 import type { ChartData } from '../types';
 import { t } from '../i18n';
+import { renderChartBestGradeBadge } from './bestGradeView';
+
+const RADAR_AXIS_COLORS: Record<ChartRadarAxis, string> = {
+  stream: '#00e8ff',
+  voltage: '#ffe566',
+  air: '#78ff9a',
+  freeze: '#c49bff',
+  chaos: '#ff9f45',
+};
 
 const RADAR_CENTER = 100;
-const RADAR_RADIUS = 72;
+const RADAR_RADIUS = 84;
 const VIEWBOX_PAD = 40;
 const VIEWBOX_SIZE = 200 + VIEWBOX_PAD * 2;
 
@@ -51,8 +61,8 @@ function gridPolygonMarkup(scale: number): string {
   return `<polygon class="chart-radar-grid" points="${points}" />`;
 }
 
-function axisLine(x1: number, y1: number, x2: number, y2: number): string {
-  return `<line class="chart-radar-axis" x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" />`;
+function axisLine(x1: number, y1: number, x2: number, y2: number, color: string): string {
+  return `<line class="chart-radar-axis" x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${color}" stroke-opacity="0.58" />`;
 }
 
 function dataShape(points: string, fillPaint: string): string {
@@ -61,12 +71,23 @@ function dataShape(points: string, fillPaint: string): string {
 
 export function renderChartLevelHtml(
   chart: ChartData | null,
-  variant: 'default' | 'card' = 'default',
+  variant: 'default' | 'card' | 'hero' | 'panel' = 'default',
 ): string {
   const level = chart && chart.notes.length > 0 ? chartDisplayLevel(chart) : null;
+  const num = level !== null ? String(level) : '—';
+  const aria = t('ui.chartLevel', { level: level ?? 0 });
+
+  if (variant === 'hero' || variant === 'panel') {
+    const variantClass = variant === 'hero' ? ' song-chart-level--hero' : ' song-chart-level--panel';
+    return `<span class="song-chart-level${variantClass}" aria-label="${aria}"><span class="song-chart-level__word">LEVEL</span><span class="song-chart-level__num">${num}</span></span>`;
+  }
+
+  if (variant === 'card') {
+    return `<span class="song-chart-level song-chart-level--card" aria-label="${aria}"><span class="song-chart-level__word">LV</span><span class="song-chart-level__num">${num}</span></span>`;
+  }
+
   const label = level !== null ? t('ui.levelEn', { level }) : '—';
-  const cardClass = variant === 'card' ? ' song-chart-level--card' : '';
-  return `<span class="song-chart-level${cardClass}" aria-label="${t('ui.chartLevel', { level: level ?? 0 })}">${label}</span>`;
+  return `<span class="song-chart-level" aria-label="${aria}">${label}</span>`;
 }
 
 export function renderChartRatingHtml(
@@ -74,11 +95,13 @@ export function renderChartRatingHtml(
   variant: 'default' | 'card' = 'default',
 ): string {
   const levelHtml = renderChartLevelHtml(chart, variant);
+  const bestGradeHtml = renderChartBestGradeBadge(chart, variant === 'card' ? 'card' : 'hero');
 
   if (variant === 'card') {
     return `
       <div class="song-chart-rating song-chart-rating--card">
         ${levelHtml}
+        ${bestGradeHtml}
       </div>
     `;
   }
@@ -86,6 +109,7 @@ export function renderChartRatingHtml(
   return `
     <div class="song-chart-rating" id="song-chart-rating">
       ${levelHtml}
+      ${bestGradeHtml}
     </div>
   `;
 }
@@ -104,6 +128,7 @@ export function renderChartRadarSvg(stats: ChartRadarStats, large = false, chart
   const svgClass = large ? 'chart-radar-svg chart-radar-svg--large' : 'chart-radar-svg';
 
   const axes = CHART_RADAR_AXES.map((key, i) => {
+    const color = RADAR_AXIS_COLORS[key];
     const outer = polarPoint(axisAngle(i), RADAR_RADIUS);
     const { x, y } = polarPoint(axisAngle(i), labelRadius);
     let anchor = 'middle';
@@ -113,17 +138,17 @@ export function renderChartRadarSvg(stats: ChartRadarStats, large = false, chart
     if (y < RADAR_CENTER - 8) baseline = 'hanging';
     else if (y > RADAR_CENTER + 8) baseline = 'text-after-edge';
     return `
-      ${axisLine(RADAR_CENTER, RADAR_CENTER, outer.x, outer.y)}
-      <text class="${labelClass}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="${anchor}" dominant-baseline="${baseline}">${t(`ui.radar.${key}`)}</text>
+      ${axisLine(RADAR_CENTER, RADAR_CENTER, outer.x, outer.y, color)}
+      <text class="${labelClass} chart-radar-label--${key}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="${anchor}" dominant-baseline="${baseline}" fill="${color}">${t(`ui.radar.${key}`)}</text>
     `;
   }).join('');
 
   const defs = large ? `
     <defs>
       <radialGradient id="${gradId}" cx="${RADAR_CENTER}" cy="${RADAR_CENTER}" r="${RADAR_RADIUS}" gradientUnits="userSpaceOnUse">
-        <stop offset="0%" stop-color="#d4fcff" stop-opacity="0.92" />
-        <stop offset="45%" stop-color="#4deaff" stop-opacity="0.74" />
-        <stop offset="100%" stop-color="#00a0e0" stop-opacity="0.58" />
+        <stop offset="0%" stop-color="#ffd4ec" stop-opacity="0.94" />
+        <stop offset="45%" stop-color="#ff4da6" stop-opacity="0.78" />
+        <stop offset="100%" stop-color="#e01888" stop-opacity="0.62" />
       </radialGradient>
     </defs>
   ` : '';
@@ -135,7 +160,7 @@ export function renderChartRadarSvg(stats: ChartRadarStats, large = false, chart
   const dataPoints = polygonPoints(values);
   const fillPaint = large
     ? `fill="url(#${gradId})"`
-    : 'fill="rgba(0, 210, 255, 0.52)"';
+    : 'fill="rgba(255, 77, 166, 0.58)"';
 
   const svg = `
     <svg class="${svgClass}" viewBox="${-VIEWBOX_PAD} ${-VIEWBOX_PAD} ${VIEWBOX_SIZE} ${VIEWBOX_SIZE}" role="img" aria-label="${t('ui.chartRadar')}" data-chart-id="${uid}">
@@ -166,7 +191,7 @@ export function renderSongChartAnalysisHtml(
   if (!chart || chart.notes.length === 0) {
     return {
       ratingHtml: renderChartRatingHtml(null),
-      radarHtml: renderChartRadarSvg({ stream: 0, voltage: 0, chaos: 0, air: 0, freeze: 0 }, largeRadar, chartId),
+      radarHtml: renderChartRadarSvg({ stream: 0, voltage: 0, air: 0, freeze: 0, chaos: 0 }, largeRadar, chartId),
     };
   }
   return {

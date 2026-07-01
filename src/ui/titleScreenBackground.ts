@@ -1,111 +1,218 @@
 import { menuBackgroundFps, useLiteMenuBackground } from '../perf/webPerf';
+import { LANE_COLORS } from '../types';
 import { MenuCanvasLoop } from './menuCanvasLoop';
 
-const INTRO_SEC = 2.5;
-const BASE_FILL = '#080112';
-const TOTAL_LANES = 12;
+const NOTE_DEPTH_POWER = 3.2;
+const NUM_TUNNEL_LANES = 4;
 
-interface NebulaOrb {
-  color: string;
-  xMotion: (time: number, w: number) => number;
-  yMotion: (time: number, h: number) => number;
+type TunnelSide = 'bottom' | 'top' | 'left' | 'right';
+type LaneIndex = 0 | 1 | 2 | 3;
+
+interface TunnelGridGeom {
+  leftX: (d: number) => number;
+  rightX: (d: number) => number;
+  ceilY: (d: number) => number;
+  floorY: (d: number) => number;
 }
 
-const NEBULA_ORBS: NebulaOrb[] = [
-  {
-    color: '#ff007f',
-    xMotion: (time, w) => Math.sin(time * 0.5) * (w * 0.2),
-    yMotion: (time, h) => Math.cos(time * 0.4) * (h * 0.15),
-  },
-  {
-    color: '#00f3ff',
-    xMotion: (time, w) => Math.cos(time * 0.4) * (w * 0.22),
-    yMotion: (time, h) => Math.sin(time * 0.6) * (h * 0.12),
-  },
-  {
-    color: '#7a00ff',
-    xMotion: (time, w) => -Math.cos(time * 0.3) * (w * 0.18),
-    yMotion: (time, h) => -Math.cos(time * 0.5) * (h * 0.18),
-  },
-  {
-    color: '#ffaa00',
-    xMotion: (time, w) => Math.sin(time * 0.8) * (w * 0.12),
-    yMotion: (time, h) => -Math.sin(time * 0.6) * (h * 0.1),
-  },
-];
+function createTunnelGridGeom(vpX: number, vpY: number, w: number, h: number): TunnelGridGeom {
+  return {
+    leftX: (d) => vpX - d * vpX,
+    rightX: (d) => vpX + d * (w - vpX),
+    ceilY: (d) => vpY - d * vpY,
+    floorY: (d) => vpY + d * (h - vpY),
+  };
+}
 
-class RhythmNote {
-  private lane = 0;
-  private z = 0;
-  private speed = 0.006;
-  private cyan = true;
-  private lengthFactor = 1;
+function tunnelDepthFromZ(z: number): number {
+  return z ** NOTE_DEPTH_POWER;
+}
 
-  constructor(
-    private readonly maxLanes: number,
-    scatter = false,
-  ) {
-    this.init(scatter);
+interface TunnelNotePlacement {
+  x: number;
+  y: number;
+  laneSpan: number;
+  travelSpan: number;
+  horizontal: boolean;
+}
+
+/** グリッドの奥行きリング上・レーン区画内の座標 */
+function tunnelNotePlacement(
+  side: TunnelSide,
+  lane: LaneIndex,
+  z: number,
+  geom: TunnelGridGeom,
+): TunnelNotePlacement {
+  const d = tunnelDepthFromZ(z);
+  const lx = geom.leftX(d);
+  const rx = geom.rightX(d);
+  const yt = geom.ceilY(d);
+  const yb = geom.floorY(d);
+  const t0 = lane / NUM_TUNNEL_LANES;
+  const t1 = (lane + 1) / NUM_TUNNEL_LANES;
+  const laneWidth = t1 - t0;
+
+  switch (side) {
+    case 'bottom':
+      return {
+        x: lx + (t0 + laneWidth * 0.5) * (rx - lx),
+        y: yb,
+        laneSpan: laneWidth * (rx - lx),
+        travelSpan: 7 + 20 * d,
+        horizontal: true,
+      };
+    case 'top':
+      return {
+        x: lx + (t0 + laneWidth * 0.5) * (rx - lx),
+        y: yt,
+        laneSpan: laneWidth * (rx - lx),
+        travelSpan: 7 + 20 * d,
+        horizontal: true,
+      };
+    case 'left':
+      return {
+        x: lx,
+        y: yt + (t0 + laneWidth * 0.5) * (yb - yt),
+        laneSpan: laneWidth * (yb - yt),
+        travelSpan: 7 + 20 * d,
+        horizontal: false,
+      };
+    case 'right':
+      return {
+        x: rx,
+        y: yt + (t0 + laneWidth * 0.5) * (yb - yt),
+        laneSpan: laneWidth * (yb - yt),
+        travelSpan: 7 + 20 * d,
+        horizontal: false,
+      };
+  }
+}
+
+function blendNoteHex(hex: string, factor: number): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const f = (c: number) => Math.min(255, Math.round(c * factor));
+  return `rgb(${f(r)},${f(g)},${f(b)})`;
+}
+
+class TunnelNote {
+  side: TunnelSide = 'bottom';
+  lane: LaneIndex = 0;
+  z = 0;
+  speed = 0.55;
+
+  respawn(scatter = false): void {
+    const sides: TunnelSide[] = ['bottom', 'top', 'left', 'right'];
+    this.side = sides[Math.floor(Math.random() * sides.length)];
+    this.lane = Math.floor(Math.random() * NUM_TUNNEL_LANES) as LaneIndex;
+    this.z = scatter ? Math.random() * 0.85 : 0;
+    this.speed = 0.4 + Math.random() * 0.65;
   }
 
-  private init(scatter = false): void {
-    this.lane = Math.floor(Math.random() * this.maxLanes) - Math.floor(this.maxLanes / 2);
-    this.z = scatter ? Math.random() : 0;
-    this.speed = Math.random() * 0.007 + 0.005;
-    this.cyan = Math.random() > 0.4;
-    this.lengthFactor = Math.random() * 0.6 + 0.4;
+  get color(): string {
+    return LANE_COLORS[this.lane];
   }
 
-  updateAndDraw(
+  update(dt: number, speedScale: number): void {
+    this.z += this.speed * speedScale * dt;
+    if (this.z > 1) this.respawn();
+  }
+
+  draw(
     ctx: CanvasRenderingContext2D,
+    vpX: number,
+    vpY: number,
     w: number,
     h: number,
-    cx: number,
-    horizon: number,
-    ease: number,
     flashScale: number,
   ): void {
-    this.z += this.speed;
-    if (this.z > 1) this.init();
+    const geom = createTunnelGridGeom(vpX, vpY, w, h);
+    const place = tunnelNotePlacement(this.side, this.lane, this.z, geom);
+    const p = tunnelDepthFromZ(this.z);
+    const alpha = Math.min(1, 0.55 + p * 1.35) * flashScale;
+    const { x, y, laneSpan, travelSpan, horizontal } = place;
 
-    const p = this.z ** 3;
-    const y = horizon + p * (h - horizon);
-    const laneWidthAtBottom = w * 0.08;
-    const xBottom = cx + this.lane * laneWidthAtBottom;
-    const x = cx + p * (xBottom - cx);
-    const noteW = (50 * p + 8) * this.lengthFactor;
-    const noteH = 6 * p + 2;
-    const alpha = Math.min(1, p * 2.5) * ease * flashScale;
-    const color = this.cyan ? '#00f3ff' : '#ff007f';
+    const width = horizontal ? laneSpan : travelSpan;
+    const height = horizontal ? travelSpan : laneSpan;
+    const left = x - width / 2;
+    const top = y - height / 2;
 
     ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.fillStyle = `${color}${Math.floor(alpha * 255).toString(16).padStart(2, '0')}`;
-    ctx.shadowBlur = (20 * p + 5) * flashScale;
-    ctx.shadowColor = color;
-    ctx.fillRect(x - noteW / 2, y - noteH / 2, noteW, noteH);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = alpha;
+    ctx.shadowBlur = (10 * p + 6) * flashScale;
+    ctx.shadowColor = this.color;
+
+    const fillGrad = horizontal
+      ? ctx.createLinearGradient(left, 0, left + width, 0)
+      : ctx.createLinearGradient(0, top, 0, top + height);
+    fillGrad.addColorStop(0, blendNoteHex(this.color, 1));
+    fillGrad.addColorStop(0.5, blendNoteHex(this.color, 1.18));
+    fillGrad.addColorStop(1, blendNoteHex(this.color, 1));
+    ctx.fillStyle = fillGrad;
+    ctx.fillRect(left, top, width, height);
+
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = `rgba(255, 255, 255, ${0.12 + p * 0.22})`;
+    const hi = Math.max(2, (horizontal ? height : width) * 0.34);
+    if (this.side === 'bottom') {
+      ctx.fillRect(left, top, width, hi);
+    } else if (this.side === 'top') {
+      ctx.fillRect(left, top + height - hi, width, hi);
+    } else if (this.side === 'left') {
+      ctx.fillRect(left + width - hi, top, hi, height);
+    } else {
+      ctx.fillRect(left, top, hi, height);
+    }
+
     ctx.restore();
   }
 }
 
-function easeOutQuart(t: number): number {
-  return 1 - (1 - t) ** 4;
+function hexToRgb(hex: string): [number, number, number] {
+  return [
+    parseInt(hex.slice(1, 3), 16),
+    parseInt(hex.slice(3, 5), 16),
+    parseInt(hex.slice(5, 7), 16),
+  ];
 }
+
+function themeRgba(hex: string, alpha: number): string {
+  const [r, g, b] = hexToRgb(hex);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+/** 4面とも色相が被らないテーマカラー（レーンカラーと同系統） */
+const WALL_COLORS = {
+  floor: '#ff2d6a',
+  ceiling: '#00e5ff',
+  left: '#a855f7',
+  right: '#ffd700',
+} as const;
+
+/** 壁面とは別系統のグリッド線色 */
+const GRID_LINE = {
+  depth: [255, 255, 255] as const,
+  lane: [210, 248, 255] as const,
+};
+
+const TOTAL_LANES = NUM_TUNNEL_LANES;
 
 export class TitleScreenBackground {
   private host: HTMLElement | null = null;
   private canvas: HTMLCanvasElement | null = null;
   private ctx: CanvasRenderingContext2D | null = null;
-  private loop = new MenuCanvasLoop(menuBackgroundFps(), (dt) => this.onFrame(dt));
+  private readonly loop = new MenuCanvasLoop(menuBackgroundFps(), (dt) => this.onFrame(dt));
   private readonly lite = useLiteMenuBackground();
-  private t = 0;
+  private gridOffset = 0;
   private reducedFlash = false;
-  private rhythmNotes: RhythmNote[] = [];
+  private tunnelNotes: TunnelNote[] = [];
   private readonly onResize = () => this.resize();
 
   setReducedFlash(enabled: boolean): void {
     this.reducedFlash = enabled;
-    this.initRhythmNotes();
+    if (this.canvas) this.initTunnelNotes();
   }
 
   mount(host: HTMLElement): void {
@@ -120,7 +227,9 @@ export class TitleScreenBackground {
 
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
-    this.t = 0;
+    this.gridOffset = 0;
+    this.initTunnelNotes();
+
     this.resize();
     window.addEventListener('resize', this.onResize);
     this.loop.start();
@@ -133,7 +242,16 @@ export class TitleScreenBackground {
     this.host = null;
     this.canvas = null;
     this.ctx = null;
-    this.rhythmNotes = [];
+    this.tunnelNotes = [];
+  }
+
+  private initTunnelNotes(): void {
+    const count = this.lite ? 11 : (this.reducedFlash ? 13 : 21);
+    this.tunnelNotes = Array.from({ length: count }, () => {
+      const note = new TunnelNote();
+      note.respawn(true);
+      return note;
+    });
   }
 
   private resize(): void {
@@ -145,23 +263,18 @@ export class TitleScreenBackground {
     this.canvas.style.width = `${rect.width}px`;
     this.canvas.style.height = `${rect.height}px`;
     this.ctx?.setTransform(dpr, 0, 0, dpr, 0, 0);
-    this.initRhythmNotes();
-  }
-
-  private initRhythmNotes(): void {
-    const count = this.lite ? 8 : (this.reducedFlash ? 10 : 14);
-    this.rhythmNotes = Array.from(
-      { length: count },
-      () => new RhythmNote(TOTAL_LANES, true),
-    );
+    this.initTunnelNotes();
   }
 
   private onFrame(dt: number): void {
-    this.t += dt * (this.reducedFlash ? 0.75 : 1);
-    this.tick();
+    this.gridOffset += dt * 2.5;
+    for (const note of this.tunnelNotes) {
+      note.update(dt, 1);
+    }
+    this.render();
   }
 
-  private tick(): void {
+  private render(): void {
     const ctx = this.ctx;
     const canvas = this.canvas;
     if (!ctx || !canvas) return;
@@ -170,34 +283,16 @@ export class TitleScreenBackground {
     const h = canvas.clientHeight;
     if (w <= 0 || h <= 0) return;
 
-    const time = this.t;
-    const ease = easeOutQuart(Math.min(time / INTRO_SEC, 1));
     const flashScale = this.reducedFlash ? 0.55 : 1;
     const cx = w / 2;
     const cy = h / 2;
-    const currentRadius = Math.min(w, h) * 0.26 * ease;
-    const horizon = cy + currentRadius * 0.1;
 
     ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = 1;
-    ctx.fillStyle = BASE_FILL;
-    ctx.fillRect(0, 0, w, h);
-
-    this.drawNebulaOrbs(ctx, w, h, cx, cy, time, flashScale);
-
-    ctx.globalCompositeOperation = 'screen';
-    this.drawCenterMask(ctx, cx, cy, currentRadius, flashScale);
-
-    ctx.globalCompositeOperation = 'lighter';
-    this.drawGrid(ctx, w, h, cx, horizon, time, flashScale);
-    for (const note of this.rhythmNotes) {
-      note.updateAndDraw(ctx, w, h, cx, horizon, ease, flashScale);
-    }
-    this.drawNeonRibbon(ctx, w, cx, cy, currentRadius, time, ease, flashScale);
-    this.drawCyberRings(ctx, cx, cy, currentRadius, time, flashScale);
-    if (!this.reducedFlash) {
-      this.drawPulse(ctx, cx, cy, w, h, time, ease, flashScale);
-    }
+    this.drawBaseFill(ctx, w, h, cx, cy);
+    this.drawTunnelWalls(ctx, w, h, cx, cy, flashScale);
+    this.drawGrid(ctx, w, h, cx, cy, flashScale);
+    this.drawTunnelNotes(ctx, cx, cy, w, h, flashScale);
 
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
@@ -205,219 +300,244 @@ export class TitleScreenBackground {
     ctx.setLineDash([]);
   }
 
-  private drawNebulaOrbs(
+  private drawBaseFill(
     ctx: CanvasRenderingContext2D,
     w: number,
     h: number,
     cx: number,
     cy: number,
-    time: number,
+  ): void {
+    const radius = Math.max(w, h) * 0.92;
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+    grad.addColorStop(0, '#1a1040');
+    grad.addColorStop(0.5, '#12082a');
+    grad.addColorStop(1, '#0c1838');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+  }
+
+  /** 深度リング×レーンで4面トンネル壁をテーマカラーで塗る */
+  private drawTunnelWalls(
+    ctx: CanvasRenderingContext2D,
+    w: number,
+    h: number,
+    vpX: number,
+    vpY: number,
     flashScale: number,
   ): void {
-    const orbRadius = Math.max(w, h) * 0.35;
-    const orbCount = this.lite ? 3 : NEBULA_ORBS.length;
+    const numDepth = this.lite ? 10 : 16;
+    const moveOffset = this.gridOffset % 1;
+    const power = NOTE_DEPTH_POWER;
+    const geom = createTunnelGridGeom(vpX, vpY, w, h);
+    const { leftX, rightX, ceilY, floorY } = geom;
 
-    for (let index = 0; index < orbCount; index++) {
-      const orb = NEBULA_ORBS[index];
-      const x = cx + orb.xMotion(time, w);
-      const y = cy + orb.yMotion(time, h);
+    const depthAt = (index: number): number => {
+      const p = (index + moveOffset) / numDepth;
+      return p ** power;
+    };
 
-      if (this.reducedFlash || this.lite) {
-        ctx.globalCompositeOperation = 'screen';
-      } else {
-        ctx.globalCompositeOperation = index % 2 === 0 ? 'difference' : 'screen';
-      }
-
-      const grad = ctx.createRadialGradient(x, y, 0, x, y, orbRadius);
-      grad.addColorStop(0, orb.color);
-      grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-
-      ctx.globalAlpha = flashScale;
+    const fillQuad = (
+      x0: number, y0: number,
+      x1: number, y1: number,
+      x2: number, y2: number,
+      x3: number, y3: number,
+      color: string,
+      depth: number,
+    ) => {
+      const edge = Math.abs((depth - 0.5) * 2);
+      const alpha = (0.32 + depth * 0.58 + edge * 0.1) * flashScale;
       ctx.beginPath();
-      ctx.arc(x, y, orbRadius * 1.3, 0, Math.PI * 2);
-      ctx.fillStyle = grad;
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.lineTo(x3, y3);
+      ctx.closePath();
+      ctx.fillStyle = themeRgba(color, Math.min(0.88, alpha));
       ctx.fill();
+    };
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
+
+    for (let i = 0; i < numDepth; i++) {
+      const d0 = depthAt(i);
+      const d1 = depthAt(Math.min(i + 1, numDepth));
+      const depthMid = (d0 + d1) * 0.5;
+
+      for (let lane = 0; lane < TOTAL_LANES; lane++) {
+        const t0 = lane / TOTAL_LANES;
+        const t1 = (lane + 1) / TOTAL_LANES;
+
+        const flx0 = leftX(d0);
+        const frx0 = rightX(d0);
+        const flx1 = leftX(d1);
+        const frx1 = rightX(d1);
+        const fy0 = floorY(d0);
+        const fy1 = floorY(d1);
+        fillQuad(
+          flx0 + t0 * (frx0 - flx0), fy0,
+          flx0 + t1 * (frx0 - flx0), fy0,
+          flx1 + t1 * (frx1 - flx1), fy1,
+          flx1 + t0 * (frx1 - flx1), fy1,
+          WALL_COLORS.floor,
+          depthMid,
+        );
+
+        const cly0 = ceilY(d0);
+        const cly1 = ceilY(d1);
+        fillQuad(
+          flx0 + t0 * (frx0 - flx0), cly0,
+          flx1 + t0 * (frx1 - flx1), cly1,
+          flx1 + t1 * (frx1 - flx1), cly1,
+          flx0 + t1 * (frx0 - flx0), cly0,
+          WALL_COLORS.ceiling,
+          depthMid,
+        );
+
+        const lyt0 = ceilY(d0) + t0 * (floorY(d0) - ceilY(d0));
+        const lyt1 = ceilY(d0) + t1 * (floorY(d0) - ceilY(d0));
+        const lyb0 = ceilY(d1) + t0 * (floorY(d1) - ceilY(d1));
+        const lyb1 = ceilY(d1) + t1 * (floorY(d1) - ceilY(d1));
+        const lx0 = leftX(d0);
+        const lx1 = leftX(d1);
+        fillQuad(
+          lx0, lyt0,
+          lx0, lyt1,
+          lx1, lyb1,
+          lx1, lyb0,
+          WALL_COLORS.left,
+          depthMid,
+        );
+
+        const ryt0 = ceilY(d0) + t0 * (floorY(d0) - ceilY(d0));
+        const ryt1 = ceilY(d0) + t1 * (floorY(d0) - ceilY(d0));
+        const ryb0 = ceilY(d1) + t0 * (floorY(d1) - ceilY(d1));
+        const ryb1 = ceilY(d1) + t1 * (floorY(d1) - ceilY(d1));
+        const rx0 = rightX(d0);
+        const rx1 = rightX(d1);
+        fillQuad(
+          rx0, ryt0,
+          rx1, ryb0,
+          rx1, ryb1,
+          rx0, ryt1,
+          WALL_COLORS.right,
+          depthMid,
+        );
+      }
     }
 
-    ctx.globalAlpha = 1;
+    ctx.restore();
   }
 
-  private drawCenterMask(
-    ctx: CanvasRenderingContext2D,
-    cx: number,
-    cy: number,
-    currentRadius: number,
-    flashScale: number,
-  ): void {
-    if (currentRadius <= 0) return;
-
-    ctx.globalCompositeOperation = 'source-over';
-    const centerMask = ctx.createRadialGradient(cx, cy, 0, cx, cy, currentRadius * 1.8);
-    const inner = 0.75 * flashScale;
-    centerMask.addColorStop(0, `rgba(5, 2, 14, ${inner})`);
-    centerMask.addColorStop(0.6, `rgba(5, 2, 14, ${0.4 * flashScale})`);
-    centerMask.addColorStop(1, 'rgba(5, 2, 14, 0)');
-
-    ctx.beginPath();
-    ctx.arc(cx, cy, currentRadius * 2, 0, Math.PI * 2);
-    ctx.fillStyle = centerMask;
-    ctx.fill();
-  }
-
+  /** 4辺グリッド — 深度リングは閉じた四角形、レーン線は四辺の角で一致 */
   private drawGrid(
     ctx: CanvasRenderingContext2D,
     w: number,
     h: number,
-    cx: number,
-    horizon: number,
-    time: number,
+    vpX: number,
+    vpY: number,
     flashScale: number,
   ): void {
-    const gridAlpha = (this.lite ? 0.7 : 1) * flashScale;
+    const gridAlpha = (this.lite ? 0.65 : 1) * flashScale;
+    const moveOffset = this.gridOffset % 1;
+    const numDepth = this.lite ? 10 : 16;
+    const numLanes = TOTAL_LANES;
+    const power = NOTE_DEPTH_POWER;
+    const lineWidth = this.lite ? 1 : 1.5;
+    const geom = createTunnelGridGeom(vpX, vpY, w, h);
 
-    ctx.save();
-    const gridGradient = ctx.createLinearGradient(0, horizon, 0, h);
-    gridGradient.addColorStop(0, 'rgba(0, 243, 255, 0)');
-    gridGradient.addColorStop(0.1, `rgba(255, 0, 127, ${0.25 * gridAlpha})`);
-    gridGradient.addColorStop(1, `rgba(255, 170, 0, ${gridAlpha})`);
-
-    ctx.strokeStyle = gridGradient;
-    ctx.lineWidth = this.lite ? 1 : 1.5;
-
-    const moveOffset = (time * 2.5) % 1;
-    const numHlines = this.lite ? 12 : 20;
-    for (let i = 0; i < numHlines; i++) {
-      const p = (i + moveOffset) / numHlines;
-      const y = horizon + (p ** 3.5) * (h - horizon);
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(w, y);
-      ctx.stroke();
-    }
-
-    const laneWidthAtBottom = w * 0.08;
-    const halfLanes = Math.floor(TOTAL_LANES / 2);
-    for (let i = -halfLanes; i <= halfLanes; i++) {
-      const xBottom = cx + i * laneWidthAtBottom;
-      ctx.beginPath();
-      ctx.moveTo(cx, horizon);
-      ctx.lineTo(xBottom, h);
-      ctx.stroke();
-    }
-
-    ctx.restore();
-  }
-
-  private drawNeonRibbon(
-    ctx: CanvasRenderingContext2D,
-    w: number,
-    cx: number,
-    cy: number,
-    currentRadius: number,
-    time: number,
-    ease: number,
-    flashScale: number,
-  ): void {
-    const freq = 0.008;
-    const baseAmp = currentRadius * 0.85;
-    const step = this.lite ? 12 : 8;
-    const halfThickness = this.lite ? 14 : 18;
-    const yJitter = this.lite ? 8 : 12;
-
-    const waveY = (x: number): number => {
-      const envelope = Math.max(0, 1 - Math.abs(x - cx) / (w * 0.55));
-      const yOffset = Math.sin(x * 0.02 + time * 5) * yJitter;
-      return cy + Math.sin(x * freq + time * 3) * baseAmp * envelope * ease + yOffset;
+    const depthAt = (index: number): number => {
+      const p = (index + moveOffset) / numDepth;
+      return p ** power;
     };
 
+    const { leftX, rightX, ceilY, floorY } = geom;
+
     ctx.save();
-    ctx.shadowBlur = 25 * flashScale;
-    ctx.shadowColor = '#00f3ff';
-    ctx.beginPath();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineWidth = lineWidth;
 
-    for (let x = 0; x <= w; x += step) {
-      const y = waveY(x);
-      if (x === 0) ctx.moveTo(x, y - halfThickness);
-      else ctx.lineTo(x, y - halfThickness);
-    }
-    for (let x = w; x >= 0; x -= step) {
-      ctx.lineTo(x, waveY(x) + halfThickness);
-    }
-    ctx.closePath();
+    const strokeGrid = (rgb: readonly [number, number, number], alpha: number) => {
+      ctx.strokeStyle = `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha})`;
+    };
 
-    const waveGrad = ctx.createLinearGradient(0, 0, w, 0);
-    waveGrad.addColorStop(0.1, 'rgba(0, 243, 255, 0)');
-    waveGrad.addColorStop(0.3, `rgba(0, 243, 255, ${0.6 * flashScale})`);
-    waveGrad.addColorStop(0.5, `rgba(255, 0, 127, ${0.8 * flashScale})`);
-    waveGrad.addColorStop(0.7, `rgba(0, 243, 255, ${0.6 * flashScale})`);
-    waveGrad.addColorStop(0.9, 'rgba(0, 243, 255, 0)');
-    ctx.fillStyle = waveGrad;
-    ctx.fill();
+    // 奥行きリング（4辺が同じ四角形で接続）
+    for (let i = 0; i < numDepth; i++) {
+      const d = depthAt(i);
+      const alpha = (0.25 + d * 0.7) * gridAlpha;
+      const lx = leftX(d);
+      const rx = rightX(d);
+      const yt = ceilY(d);
+      const yb = floorY(d);
+
+      strokeGrid(GRID_LINE.depth, alpha * 0.82);
+      ctx.beginPath();
+      ctx.moveTo(lx, yb);
+      ctx.lineTo(rx, yb);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(lx, yt);
+      ctx.lineTo(rx, yt);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(lx, yt);
+      ctx.lineTo(lx, yb);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(rx, yt);
+      ctx.lineTo(rx, yb);
+      ctx.stroke();
+    }
+
+    // レーン線（四隅で一致するよう端から端へ等分）
+    for (let lane = 0; lane <= numLanes; lane++) {
+      const t = lane / numLanes;
+      const edgeT = Math.abs(t - 0.5) * 2;
+      const laneAlpha = (0.3 + edgeT * 0.42) * gridAlpha;
+
+      const bottomX = t * w;
+      const topX = t * w;
+      const leftY = t * h;
+      const rightY = t * h;
+
+      strokeGrid(GRID_LINE.lane, laneAlpha);
+      ctx.beginPath();
+      ctx.moveTo(vpX, vpY);
+      ctx.lineTo(bottomX, h);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(vpX, vpY);
+      ctx.lineTo(topX, 0);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(vpX, vpY);
+      ctx.lineTo(0, leftY);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(vpX, vpY);
+      ctx.lineTo(w, rightY);
+      ctx.stroke();
+    }
+
     ctx.restore();
   }
 
-  private drawCyberRings(
+  private drawTunnelNotes(
     ctx: CanvasRenderingContext2D,
-    cx: number,
-    cy: number,
-    radius: number,
-    time: number,
-    flashScale: number,
-  ): void {
-    if (radius <= 0) return;
-
-    const speedScale = this.reducedFlash ? 0.45 : 1;
-
-    ctx.save();
-    ctx.shadowBlur = 30 * flashScale;
-    ctx.shadowColor = '#ff007f';
-    ctx.lineWidth = this.lite ? 3 : 4;
-    ctx.strokeStyle = '#ff007f';
-
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-    ctx.setLineDash([60, 30, 10, 30]);
-    ctx.lineDashOffset = -time * 40 * speedScale;
-    ctx.stroke();
-
-    ctx.lineWidth = this.lite ? 1.5 : 2;
-    ctx.strokeStyle = '#00f3ff';
-    ctx.shadowColor = '#00f3ff';
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius * 0.88, 0, Math.PI * 2);
-    ctx.setLineDash([10, 15]);
-    ctx.lineDashOffset = time * 80 * speedScale;
-    ctx.stroke();
-
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = `rgba(255, 255, 255, ${0.3 * flashScale})`;
-    ctx.shadowBlur = 0;
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius * 0.85, 0, Math.PI * 2);
-    ctx.setLineDash([]);
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  private drawPulse(
-    ctx: CanvasRenderingContext2D,
-    cx: number,
-    cy: number,
+    vpX: number,
+    vpY: number,
     w: number,
     h: number,
-    time: number,
-    ease: number,
     flashScale: number,
   ): void {
-    const pulseMax = Math.min(w, h) * 0.8;
-    const pulseRadius = (time * 220) % pulseMax;
-    const pulseAlpha = Math.max(0, 0.6 - pulseRadius / pulseMax) * ease * flashScale;
-
-    ctx.beginPath();
-    ctx.arc(cx, cy, pulseRadius, 0, Math.PI * 2);
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = `rgba(0, 243, 255, ${pulseAlpha})`;
-    ctx.shadowBlur = 0;
-    ctx.stroke();
+    for (const note of this.tunnelNotes) {
+      note.draw(ctx, vpX, vpY, w, h, flashScale);
+    }
   }
 }

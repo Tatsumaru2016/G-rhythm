@@ -50,3 +50,17 @@ export function sortBuiltinIndices(
     return applyDirection(cmp, settings.direction);
   });
 }
+
+export function stepBuiltinIndex(
+  charts: readonly ChartData[],
+  settings: SongSortSettings,
+  currentIndex: number,
+  delta: number,
+): number {
+  const order = sortBuiltinIndices(charts, settings);
+  if (!order.length) return 0;
+  const displayIndex = order.indexOf(currentIndex);
+  const base = displayIndex < 0 ? 0 : displayIndex;
+  const nextDisplay = (base + delta + order.length) % order.length;
+  return order[nextDisplay];
+}
